@@ -1,0 +1,7 @@
+case,f1_flap_Hz,f2_flap_Hz,f3_flap_Hz,ndof,damage,note
+isolated_vane_healthy,886.9,5528.6,11466.4,68040,none,"as-built coupon 30x4.1x1.0, root clamp"
+isolated_vane_60pct_root_thinning,265.6,3563.6,4635.9,58644,"60% thickness over x/L in [0,0.25]",same damage idealization as the assembly sweep
+shift_pct,-70.052,-35.544,-59.57,,,isolated-vane shifts
+assembly_pair_mean_1p2mm,-0.787,,,278520,same 60% root thinning,b5 asbuilt
+assembly_pair_mean_1p0mm,-1.075,,,385176,same 60% root thinning,b5 mesh refinement
+dilution_factor,65.2-89.0,,,,,matched damage; previous 15-30x compared a sharp crack with root thinning
