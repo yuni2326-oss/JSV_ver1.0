@@ -1,0 +1,6 @@
+xi_d,r_d_mm,S_mm,s_bar_pct,w_mm,n_real,abs_err_xi_mm_median,abs_err_s_pp_median,boundary_hit_prob,note
+0.2,19.632,1.2,5.671077504725897,3.0,12,0.23750383166998562,0.2851224089207866,0.0,PILOT: noise = 3% of shift (superseded convention)
+0.35,22.806,1.2,5.671077504725897,3.0,12,0.13054037315883477,0.07610266198770435,0.0,PILOT: noise = 3% of shift (superseded convention)
+0.5,25.980000000000004,1.2,5.671077504725897,3.0,12,0.10419000125872589,0.0876163703391053,0.0,PILOT: noise = 3% of shift (superseded convention)
+0.65,29.154000000000003,1.2,5.671077504725897,3.0,12,0.12572057004266154,0.0903377051109204,0.0,PILOT: noise = 3% of shift (superseded convention)
+0.8,32.328,1.2,5.671077504725897,3.0,12,0.13065369904063623,0.10467454142588511,0.0,PILOT: noise = 3% of shift (superseded convention)
