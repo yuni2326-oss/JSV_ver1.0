@@ -1,0 +1,5 @@
+# 1번 시편 사전 시험(48번) 가공 기록 — 한 번 깎을 때마다 한 줄. mass_before_g·mass_after_g는 마스크를 붙인 채 잰 값(물로 헹구고 바람으로 말린 뒤)이고, 그 차가 removed_mg다.
+# 70 %(26.1 mg)에서 멈추고 mg_per_C = removed_mg / charge_C를 구해 나머지 전하량을 정한다. windows = gap2(깃 2–3 사이, 마스크 1쪽 ①의 'L6·S1' 창).
+state,step,windows,method,electrolyte,voltage_V,current_A,time_min,charge_C,mask,mass_before_g,mass_after_g,removed_mg,mg_per_C,notes
+L1,1,gap2,,,,,,,,,,,,70 % 점검까지
+L1,2,gap2,,,,,,,,,,,,나머지

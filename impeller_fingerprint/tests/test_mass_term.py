@@ -293,16 +293,29 @@ class TestSandwichLaw:
 
     @pytest.mark.parametrize("p", [0.01, 0.05, 0.2, 0.5])
     def test_coupling_law_is_dK_over_one_plus_dK(self, p):
-        """d_K = p/(2−p), d_M = p/2  ⇒  d_M = d_K/(1+d_K)."""
+        """같은 두께 면판(r = 1, 08-13·r3.9 공표 법칙): d_K = p/(2−p), d_M = p/2 ⇒ d_M = d_K/(1+d_K)."""
         d_K = p / (2.0 - p)
-        assert fwd.mass_field_sandwich(d_K) == pytest.approx(p / 2.0, rel=1e-12)
+        assert fwd.mass_field_sandwich(d_K, ratio=1.0) == pytest.approx(p / 2.0, rel=1e-12)
+
+    @pytest.mark.parametrize("p", [0.01, 0.05, 0.2, 0.5])
+    def test_coupling_law_asymmetric_faces(self, p):
+        """실측 비대칭 면판(앞판 t_d 손상, 뒤판 t_o): d_K = p·t_o/[t_d(1−p)+t_o], d_M = p·t_d/(t_d+t_o)
+        ⇒ d_M = d_K/(r + d_K), r = t_o/t_d. 기본 r은 정본 0.60/0.40 = 1.5(G3)."""
+        t_d, t_o = geo.T_FRONT, geo.T_BACK
+        d_K = p * t_o / (t_d * (1.0 - p) + t_o)
+        assert fwd.mass_field_sandwich(d_K) == pytest.approx(p * t_d / (t_d + t_o), rel=1e-12)
 
     def test_sandwich_mass_is_about_three_times_monolithic(self):
-        """같은 d_K에서 샌드위치의 질량손실이 판 법칙의 2.6–3.0배 — 세제곱↔선형 차이."""
+        """같은 두께 면판: 같은 d_K에서 샌드위치의 질량손실이 판 법칙의 2.3–3.0배 — 세제곱↔선형 차이.
+        정본 비대칭(G3 r = 1.5)에서는 1.6–2.0배, d_K→0 극한은 3/r = 2."""
         d_K = np.array([0.01, 0.05, 0.1, 0.2])
-        ratio = fwd.mass_field_sandwich(d_K) / fwd.mass_field_exact(d_K)
+        ratio = fwd.mass_field_sandwich(d_K, ratio=1.0) / fwd.mass_field_exact(d_K)
         assert np.all(ratio > 2.3) and np.all(ratio < 3.0)
         assert ratio[0] == pytest.approx(3.0, abs=0.05)   # d_K→0 극한은 정확히 3
+        r = geo.T_BACK / geo.T_FRONT
+        ratio_ab = fwd.mass_field_sandwich(d_K) / fwd.mass_field_exact(d_K)
+        assert np.all(ratio_ab > 1.6) and np.all(ratio_ab < 2.0)
+        assert ratio_ab[0] == pytest.approx(3.0 / r, abs=0.03)
 
     def test_sandwich_moves_sign_reversal_inboard(self, pool):
         """ξ*는 γ^M/γ^K = 1/ζ를 만족하므로 ζ가 크면(샌드위치) 반전이 안쪽으로 온다."""
@@ -341,9 +354,13 @@ class TestSandwichLaw:
 
 
 class TestAsBuiltSandwichLaw:
-    """실측 t_f/s = 0.196은 얇은면판 극한이 아니다 — 정확 단면으로 법칙을 다시 낸다(F60)."""
+    """08-13 같은 두께 단면(t_f/s = 0.196)은 얇은면판 극한이 아니었다 — 정확 단면으로 법칙을 다시 냈다(F60).
 
-    T_F, S = geo.T_SHEET, geo.FACE_SEPARATION
+    2026-10-16 재측정으로 정본은 비대칭 두 면판이 됐다(`TestTwoFaceAsBuilt`). 같은 두께 함수는 08-13
+    산출물 재현용으로 남아 있고, 여기서는 그 치수(`GEOM_0813`)를 명시 인자로 쓴다.
+    """
+
+    T_F, S = geo.GEOM_0813.t_sheet, geo.GEOM_0813.face_separation
 
     def test_production_section_matches_test_helper(self):
         """`forward.sandwich_I`가 테스트 헬퍼(독립 구현)와 일치 — 단면식 교차검증."""
@@ -362,15 +379,15 @@ class TestAsBuiltSandwichLaw:
 
     def test_depth_inversion_round_trip(self):
         p = np.array([0.01, 0.05, 0.1, 0.25, 0.5, 0.8])
-        d_K = fwd.sandwich_dk_from_depth(p)
-        assert np.allclose(fwd.sandwich_depth_from_dk(d_K), p, atol=1e-10)
+        d_K = fwd.sandwich_dk_from_depth(p, self.T_F, self.S)
+        assert np.allclose(fwd.sandwich_depth_from_dk(d_K, self.T_F, self.S), p, atol=1e-10)
 
     @pytest.mark.parametrize("p,ratio_lo,ratio_hi", [(0.05, 1.38, 1.40),
                                                      (0.1, 1.36, 1.38),
                                                      (0.5, 1.19, 1.20)])
     def test_leading_term_underestimates_dK_at_measured_ratio(self, p, ratio_lo, ratio_hi):
         """선행차수 p/(2−p)는 실측 t_f/s에서 d_K를 19–39 % 과소평가한다."""
-        d_K = float(fwd.sandwich_dk_from_depth(p))
+        d_K = float(fwd.sandwich_dk_from_depth(p, self.T_F, self.S))
         assert ratio_lo <= d_K / (p / (2 - p)) <= ratio_hi
 
     def test_published_law_is_an_upper_bound_on_mass(self):
@@ -380,8 +397,8 @@ class TestAsBuiltSandwichLaw:
         thin = fwd.mass_field_sandwich(d_K)
         mono = fwd.mass_field_exact(d_K)
         assert np.all(ab < thin) and np.all(ab > mono)
-        zeta = ab / d_K
-        assert np.all(zeta > 0.60) and np.all(zeta < 0.72)
+        zeta = ab / d_K                       # 실측 비대칭 정본: 0.48–0.54 (08-13 같은 두께는 0.60–0.72)
+        assert np.all(zeta > 0.45) and np.all(zeta < 0.56)
 
     def test_asbuilt_law_wired_into_maps(self):
         pool_ = [ker.mode_kernel(PLATE, m=m, n=n, n_grid=1001) for m, n in MODES]
@@ -397,6 +414,42 @@ class TestAsBuiltSandwichLaw:
                               mass="sandwich_asbuilt")
         v_thin = val.e_pert_abs(PLATE, pool_, MODES, 0.6, 0.05, W, mass="sandwich")
         assert not np.allclose(v_ab, v_thin, rtol=1e-3)
+
+
+class TestTwoFaceAsBuilt:
+    """정본(G3, 2026-10-30) — 비대칭 두 면판(앞판 0.40 손상, 뒤판 0.60, 간격 3.00 mm; G1은 0.375/0.59/3.18)."""
+
+    def test_equal_faces_reduce_to_sandwich_I(self):
+        for p in (0.0, 0.05, 0.25, 0.5, 0.9):
+            t, s_ = 1.0e-3, 5.1e-3
+            assert float(fwd.two_face_I(p, t, t, s_ - t)) == pytest.approx(
+                float(fwd.sandwich_I(p, t, s_)), rel=1e-12)
+
+    def test_defaults_are_the_measured_canon(self):
+        p = np.array([0.02, 0.1, 0.4])
+        a = fwd.two_face_dk_from_depth(p)
+        b = fwd.two_face_dk_from_depth(p, geo.T_FRONT, geo.T_BACK, geo.GAP)
+        assert np.array_equal(a, b)
+
+    def test_which_face_is_thinned_sets_the_coupling(self):
+        """얇은 앞판을 깎으면 ζ0 ≈ 0.56(G1 0.545), 두꺼운 뒤판을 깎으면 ≈ 1.03(G1 1.09) — 면 선택이 결합비를 정한다."""
+        p = 1e-6
+        zf = (p * geo.T_FRONT / (geo.T_FRONT + geo.T_BACK)) / float(fwd.two_face_dk_from_depth(p))
+        zb = (p * geo.T_BACK / (geo.T_FRONT + geo.T_BACK)) / float(
+            fwd.two_face_dk_from_depth(p, geo.T_BACK, geo.T_FRONT, geo.GAP))
+        assert zf == pytest.approx(0.560, abs=0.005)
+        assert zb == pytest.approx(1.025, abs=0.02)
+        g1 = geo.ASBUILT_G1
+        assert (p * g1.t_front / (g1.t_front + g1.t_back)) / float(
+            fwd.two_face_dk_from_depth(p, g1.t_front, g1.t_back, g1.gap)) == pytest.approx(0.545, abs=0.005)
+
+    def test_round_trip_and_full_removal(self):
+        p = np.array([0.0, 0.01, 0.1, 0.5, 0.95])
+        d_K = fwd.two_face_dk_from_depth(p)
+        assert np.all(np.diff(d_K) > 0)
+        assert np.allclose(fwd.two_face_depth_from_dk(d_K), p, atol=1e-9)
+        I1 = float(fwd.two_face_I(1.0, geo.T_FRONT, geo.T_BACK, geo.GAP))
+        assert I1 == pytest.approx(geo.T_BACK ** 3 / 12.0, rel=1e-12)
 
 
 class TestThicknessInvarianceOfIdentifiability:

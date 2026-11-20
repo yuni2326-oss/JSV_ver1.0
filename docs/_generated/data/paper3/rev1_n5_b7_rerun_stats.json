@@ -1,0 +1,31 @@
+{
+ "stated_cov_rerun": {
+  "n_cells": 180,
+  "n_saturated": 18,
+  "nonsat_abs_bias_median_mm": 1.8013405778397291,
+  "nonsat_abs_bias_range_mm": [
+   0.008777165817399074,
+   2.7485931279776668
+  ],
+  "std_over_crlb_median": 0.9458264524055391,
+  "cells_bias_gt_crlb": 170,
+  "bias_over_crlb_median": 17.966677571219144,
+  "bias_change_30x_median": 0.012726867111571847,
+  "coverage95_xi_median": 0.0
+ },
+ "b7_as_committed_legacy_cov": {
+  "n_cells": 180,
+  "n_saturated": 16,
+  "nonsat_abs_bias_median_mm": 1.7271484536563575,
+  "nonsat_abs_bias_range_mm": [
+   0.0905149947206168,
+   2.7654464842606665
+  ],
+  "std_over_crlb_median": 0.9382920029144034,
+  "cells_bias_gt_crlb": 172,
+  "bias_over_crlb_median": 18.565325255964762,
+  "bias_change_30x_median": 0.011992701378641906,
+  "coverage95_xi_median": 0.0
+ },
+ "elapsed_s": 1916.6203680038452
+}

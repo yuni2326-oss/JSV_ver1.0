@@ -1,0 +1,3 @@
+set,labels,canonical_crlb_xi_mm,subset_noise_crlb_xi_mm,canonical_crlb_s_pp,subset_noise_crlb_s_pp,default_crlb_xi_mm,reduction_vs_default_subset_noise
+d_optimal_4 (25.6 kHz),m1n0|m2n0|m1n1|m2n1,0.16242053070231238,0.16242053070231238,0.1336564209518462,0.1336564209518462,0.27928623124259694,0.4184441890326175
+d_optimal_4 re-selected with subset noise,m1n0|m2n0|m1n1|m2n1,,0.16242053070231238,,0.1336564209518462,0.27928623124259694,0.4184441890326175

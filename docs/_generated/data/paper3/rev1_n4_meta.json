@@ -1,0 +1,23 @@
+{
+ "git_head": "cd68430",
+ "solver": "radial Hermite-cubic FEM + element-energy Rayleigh",
+ "fem_n_elem": 100,
+ "c": 0.001,
+ "w_ref_mm": 3.0,
+ "seed0": 20261006,
+ "started": "2026-10-31 02:25:49",
+ "finished": "2026-10-31 02:25:49",
+ "items": [
+  "decompsum"
+ ],
+ "argv": {
+  "item": "decompsum",
+  "workers": 4,
+  "n_real": 300,
+  "matchings": [
+   "nominal",
+   "in_domain",
+   "peak"
+  ]
+ }
+}

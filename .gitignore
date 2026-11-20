@@ -1,3 +1,11 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+# Figures are regenerated, not committed
+docs/_generated/figures/
+bench/paper-fig/*.png
+bench/paper-fig/*.pdf
+# Photographs of the specimens are not part of this repository
+*.jpg
+*.jpeg
+bench/groove-test/photos/

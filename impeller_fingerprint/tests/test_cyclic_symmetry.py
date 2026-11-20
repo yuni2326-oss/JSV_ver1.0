@@ -57,11 +57,16 @@ class TestSpec:
             ihx.HexImpellerSpec(n_vane=5, n_theta=108).check()
 
     def test_measured_section_derived_dimensions(self):
+        """정본(G3: 앞판 0.40, 뒤판 0.60, 간격 3.00 mm) — 전체두께·면 중심 간격은 파생값."""
         s = ihx.HexImpellerSpec()
-        assert s.t_sheet == pytest.approx(1.0e-3)
-        assert s.channel == pytest.approx(4.1e-3)
-        assert s.total_thickness == pytest.approx(6.1e-3)
-        assert s.face_separation == pytest.approx(5.1e-3)
+        assert (s.t_front, s.t_back) == pytest.approx((0.40e-3, 0.60e-3))
+        assert s.t_sheet == pytest.approx(0.60e-3)                 # 하위호환 = 뒤판(유로층 시작 z)
+        assert s.channel == pytest.approx(3.00e-3)
+        assert s.total_thickness == pytest.approx(3.00e-3 + 0.40e-3 + 0.60e-3)
+        assert s.face_separation == pytest.approx(3.00e-3 + 0.5 * (0.40e-3 + 0.60e-3))
+        z = s.z_breaks
+        assert z[s.n_z_shroud] == pytest.approx(0.60e-3)
+        assert z[-1] == pytest.approx(s.total_thickness)
 
     def test_modulation_depth_endpoints(self):
         s = ihx.HexImpellerSpec(n_theta=108, n_vane=6)

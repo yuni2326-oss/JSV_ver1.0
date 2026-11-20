@@ -1,0 +1,22 @@
+install jax and jaxlib to use terms_jax.py!
+sfepy: WARNING: module /home/super/equip-venv/lib/python3.12/site-packages/sfepy/terms/terms_jax.py cannot be imported!
+sfepy: reason:
+ No module named 'jax'
+[KEY:all] 빠진 질량 4.226 g을 all에 더함 (α 0.114)
+[KEY:all] 459738 DOF, 건전 2168.3–18114.9 Hz, 관측량 54 (242s)
+[KEY:all] B ξ0.8–1.0 30° @0° (256s)
+[KEY:all] B ξ0.8–1.0 30° @15° (271s)
+[KEY:all] B ξ0.8–1.0 30° @30° (285s)
+[KEY:all] B ξ0.8–1.0 30° @45° (299s)
+[KEY:all] B ξ0.8–1.0 360° @0° (313s)
+[KEY:all] B ξ0.8–1.0 360° @15° (327s)
+[KEY:all] B ξ0.8–1.0 360° @30° (342s)
+[KEY:all] B ξ0.8–1.0 360° @45° (356s)
+[KEY:all] C ξ0.2–0.4 30° @0° (370s)
+[KEY:all] C ξ0.2–0.4 30° @30° (384s)
+[KEY:all] C ξ0.2–0.4 360° @0° (399s)
+[KEY:all] R ξ0.9–1.0 8° @0° (413s)
+[KEY:all] R ξ0.9–1.0 8° @15° (427s)
+[KEY:all] R ξ0.9–1.0 8° @30° (441s)
+[KEY:all] R ξ0.9–1.0 8° @45° (455s)
+[KEY:all] 끝 (455s)

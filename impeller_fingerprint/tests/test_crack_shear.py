@@ -134,9 +134,9 @@ class TestExactEBFromCompliance:
     def test_tada_convention_table1_values(self, ab, f1_tada):
         """정본 Table 1의 **Tada 열**을 고정한다(§4.1·§5가 인용하는 물리 예측의 스프링 짝).
 
-        2026-08-13 갱신: 실측 판두께로 h/L = 0.04 → 1/30이 됐다. 무차원 스프링 유연도
-        c_θEI/L ∝ h/L이므로 균열이 상대적으로 **덜** 유연해져 강하가 작아진다 —
-        옛 값 0.99556/0.96262/0.88227/0.80835는 h = 1.2 mm의 것이다.
+        G3 정본(2026-10-30): 깃 두께 1.0 mm, h/L = 1/30 — 08-13과 같은 두께라 값도 같다(0.99630/0.96856/
+        0.89904/0.83277). 무차원 스프링 유연도 c_θEI/L ∝ h/L이라 G1(h 1.2 mm, h/L 0.04)에서는 균열이 더 유연해
+        F61 이전 값 0.99556/0.96262/0.88227/0.80835였다.
         """
         ctad = cs.compliance(ab, BEAM.h, BEAM.b, BEAM.E, BEAM.nu)["c_MM"]
         assert cs.exact_eb_ratios(BEAM, ctad)[0] == pytest.approx(f1_tada, abs=5e-5)
@@ -147,7 +147,7 @@ class TestExactEBFromCompliance:
         같은 관측량을 mode 2에서 보면 힌지 인자가 1.12–1.20으로 커진다(F44). 즉 점 힌지
         환원은 균열이 크게 움직이는 모드에서 정확하고 곡률-null 모드에서 부정확하다.
         """
-        ab, ratio_2d = 0.5, 0.897206        # a11_crack2d.csv, plane stress, ref=3
+        ab, ratio_2d = 0.5, 0.897206        # a11 (h = 1.0 mm, G3·08-13), plane stress, ref=3; G1 h = 1.2는 0.879967
         cdim = cs.compliance_dimarogonas(ab, BEAM.h, BEAM.b, BEAM.E)
         ctad = cs.compliance(ab, BEAM.h, BEAM.b, BEAM.E, BEAM.nu)["c_MM"]
         s_dim = 1 - cs.exact_eb_ratios(BEAM, cdim)[0]

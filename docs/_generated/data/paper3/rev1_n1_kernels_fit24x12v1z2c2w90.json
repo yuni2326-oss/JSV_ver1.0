@@ -1,0 +1,13 @@
+{
+ "key": "fit24x12v1z2c2w90",
+ "git": "1ac329d",
+ "ndof": 231930,
+ "n_modes": 60,
+ "s_probe": 0.001,
+ "dxi": 0.01,
+ "w": 0.003,
+ "support": "inner-edge clamp r=a",
+ "damage": "front-shroud outer-face thinning, exact two-flange d_K\u2192p",
+ "rho": 7930.0,
+ "seconds_scan": 1378.1662454605103
+}

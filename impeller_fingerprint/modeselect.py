@@ -48,16 +48,26 @@ def subset_metrics(subset: Sequence, plate, theta: tuple[float, float], w: float
 
 
 def d_optimal_subset(pool: Sequence, plate, theta: tuple[float, float], w: float,
-                     sigma: np.ndarray, k: int, mass=None) -> dict:
+                     sigma, k: int, mass=None) -> dict:
     """det F를 최대화하는 k-모드 부분집합(전수탐색; 풀이 작아 가능).
 
     `mass`가 주어지면 질량항 포함 순방향(설계서 F12)의 야코비안으로 det F를 평가한다 —
     선택 자체가 모델에 의존하므로 반드시 함께 넘겨야 한다(설계서 M7/A5).
+
+    `sigma`: **실수(반복성 c = σ_f/f)를 권장한다** — 그러면 후보 부분집합마다 그 관측량 종류에
+    맞는 Σ_y(doublet 쌍평균 2c, m = 0 단일 2√2c)를 새로 만든다. 행렬을 주면 모든 후보에 같은
+    행렬을 **위치 순서대로** 쓰므로, 후보들이 같은 관측량 종류 배열을 공유할 때만 옳다.
+    2026-10-06(R1 수정, N1): 생산 `compare_mode_sets`가 풀 앞 k개 모드의 Σ_y를 모든 후보에
+    썼다 — 25.6 kHz 풀에서 단일모드 m0n1이 2c를 받아 D-최적이 {m0n0, m1n0, m0n1, m1n1}
+    (CRLB_ξ 0.175 mm)으로 잘못 골라졌다. 올바른 Σ_y의 D-최적은 {m1n0, m2n0, m1n1, m2n1}
+    (0.162 mm)이고, 20 kHz 풀도 {m0n0, m1n0, m3n0, m4n0} → {m1n0, m2n0, m3n0, m4n0}이 된다.
     """
+    per_subset = np.ndim(sigma) == 0
     best = None
     for combo in combinations(range(len(pool)), k):
         subset = [pool[i] for i in combo]
-        m = subset_metrics(subset, plate, theta, w, sigma, mass=mass)
+        sig = noi.sigma_y_for_modes(subset, float(sigma)) if per_subset else sigma
+        m = subset_metrics(subset, plate, theta, w, sig, mass=mass)
         if best is None or m["det_F"] > best["det_F"]:
             best = {"labels": [s.label for s in subset], "indices": list(combo),
                     "det_F": m["det_F"], "metrics": m}
@@ -105,16 +115,25 @@ def pocket_jacobian(plate, ms_list: Sequence[int], theta: tuple[float, float],
     return np.stack([d_xi, d_s], axis=1)
 
 
+#: 레일 후보 풀(계열 정의, G2 결정 D3). 08-13 레일 두께 2.0 mm의 20·25.6 kHz 대역과 **같은 모드 집합**이다.
+#: 레일 두께가 두 면판 합(G3 1.00 mm, ×0.5; G1 0.965 mm, ×0.4825)이 되면 주파수 컷은 다른 집합을 고른다.
+FAMILY_POOLS = (("n0_m0-4", lambda k: k.n == 0 and k.m <= 4),
+                ("n0_m0-4+n1_m0-2", lambda k: (k.n == 0 and k.m <= 4) or (k.n == 1 and k.m <= 2)))
+
+
 def compare_mode_sets(plate, pool: Sequence, theta: tuple[float, float], w: float,
                       sigma_rel: float, f_max: float = 2.0e4,
-                      ms_pocket: Sequence[int] = (1, 2, 3), mass=None) -> list[dict]:
+                      ms_pocket: Sequence[int] = (1, 2, 3), mass=None,
+                      select=None) -> list[dict]:
     """다섯 모드셋의 CRLB 비교표 — "대칭성 관측량이 무엇을 더 주는가"의 정량답.
 
+    `select`(모드 → bool)를 주면 주파수 컷 대신 그 술어로 후보 풀을 고른다(`FAMILY_POOLS`).
     `mass`(예: "exact" 또는 결합비 숫자)를 주면 (i)–(iii) 가우시안 반경손상 행을 질량항
     포함 순방향으로 계산한다. (iv)/(v) 포켓 행은 `degenerate`가 이미 δK−λδM을 직접 다루므로
     (`mass_term=True` 기본) `mass` 값과 무관하게 항상 질량항을 포함한다.
     """
-    measurable = [k for k in pool if k.f <= f_max]
+    measurable = ([k for k in pool if select(k)] if select is not None
+                  else [k for k in pool if k.f <= f_max])
     default = [k for k in pool if k.n == 0 and k.m <= 3]
     rows: list[dict] = []
 
@@ -133,8 +152,7 @@ def compare_mode_sets(plate, pool: Sequence, theta: tuple[float, float], w: floa
         [k.label for k in default])
 
     k_opt = min(4, len(measurable))
-    best = d_optimal_subset(measurable, plate, theta, w,
-                            noi.sigma_y_for_modes(measurable[:k_opt], sigma_rel), k=k_opt, mass=mass)
+    best = d_optimal_subset(measurable, plate, theta, w, float(sigma_rel), k=k_opt, mass=mass)
     add("d_optimal_4", best["metrics"], k_opt, "gaussian_radial", best["labels"])
 
     m_all = subset_metrics(measurable, plate, theta, w,

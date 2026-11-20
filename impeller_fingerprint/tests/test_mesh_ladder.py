@@ -23,6 +23,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from impeller_fingerprint import geometry as geo
 from impeller_fingerprint import impeller_hex as ihx
 
 #: 기본값은 **이 체크아웃의** 산출 디렉터리다 — 절대경로를 박으면 클론에서 동작하지
@@ -66,11 +67,23 @@ class TestDefaultPathUnchanged:
         assert s.footprint_spec is s
 
     def test_production_asbuilt_footprint_is_one_cell_per_station(self):
-        """as-built 물리 판정은 18×108에서 반경단면마다 정확히 1셀이다(사다리의 기준형상)."""
-        s = ihx.HexImpellerSpec(n_vane=6)
-        fp = ihx.footprint_grid(s)
-        assert fp.sum(axis=1).tolist() == [s.n_vane] * s.n_r
-        assert float(fp.mean()) == pytest.approx(1.0 / s.cells_per_sector, rel=1e-12)
+        """사다리의 기준형상: 18×108에서 반경단면마다 정확히 1셀.
+
+        08-13 기하(깃 1.0 mm, wrap 60°, a 15.40 mm)는 물리 판정이 우연히 1셀/단이었다. 2026-10-16 실측 형상
+        (깃 1.2 mm, wrap 62°, a 14.955 mm)에서는 물리 판정이 한 반경단에서 비므로(균등격자의 알려진 한계,
+        N1이 캠버 정합 격자를 쓰는 이유) Fig. 1·a13 as-built는 `vane_arc_cells = 1`로 1셀/단을 명시한다.
+        """
+        g = geo.GEOM_0813
+        old = ihx.HexImpellerSpec(n_vane=6, a=g.a, b=g.b, t_front=g.t_sheet, t_back=g.t_sheet,
+                                  channel=g.b2_channel, t_vane=g.t_vane, wrap_deg=60.0)
+        fp = ihx.footprint_grid(old)
+        assert fp.sum(axis=1).tolist() == [old.n_vane] * old.n_r
+        assert float(fp.mean()) == pytest.approx(1.0 / old.cells_per_sector, rel=1e-12)
+        phys = ihx.footprint_grid(ihx.HexImpellerSpec(n_vane=6))
+        assert min(phys.sum(axis=1)) == 0                      # 물리 판정은 끊긴다
+        s = ihx.HexImpellerSpec(n_vane=6, vane_arc_cells=1)
+        fp1 = ihx.footprint_grid(s)
+        assert fp1.sum(axis=1).tolist() == [s.n_vane] * s.n_r
 
 
 class TestShapeIsFrozenInPhysicalSpace:

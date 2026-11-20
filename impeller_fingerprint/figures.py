@@ -469,12 +469,17 @@ def _render_panel(ax, coors, conn, u, z_band=None, elev=46.0, azim=-58.0,
 
 
 def _overlay_camber(ax, coors, u, n_vane, wrap_deg, a, b, scale_frac=0.022,
-                     **kw):
+                     r_vane_in=None, sign=1.0, z_top=None, **kw):
     """전면 슈라우드 표면에 **베인 캠버선**을 겹쳐 그린다 — m=N/2 절점선이 베인 집합에
-    잠긴다는 것을 그림에서 읽게 하는 유일한 방법. 변형 좌표를 쓰므로 표면에 붙어 보인다."""
+    잠긴다는 것을 그림에서 읽게 하는 유일한 방법. 변형 좌표를 쓰므로 표면에 붙어 보인다.
+
+    `r_vane_in`을 주면 N1·N6 격자와 같은 로그나선 캠버(θ = sign·wrap·ln(r/r_vin)/ln(b/r_vin)),
+    없으면 옛 그림의 선형 캠버. `z_top`은 앞판 윗면 높이(흡입구 테가 더 높을 때)."""
     dia = 2.0 * np.hypot(coors[:, 0], coors[:, 1]).max()
     Xd = (coors + (scale_frac * dia) * u / np.abs(u).max()) * 1e3
-    top = np.nonzero(coors[:, 2] >= coors[:, 2].max() - 1e-9)[0]
+    z_top = coors[:, 2].max() if z_top is None else z_top
+    top = np.nonzero(np.isclose(coors[:, 2], z_top, atol=1e-9)
+                     & (np.hypot(coors[:, 0], coors[:, 1]) >= a - 1e-9))[0]
     rr = np.hypot(coors[top, 0], coors[top, 1])
     th = np.arctan2(coors[top, 1], coors[top, 0])
     rings = np.unique(np.round(rr, 9))
@@ -484,8 +489,12 @@ def _overlay_camber(ax, coors, u, n_vane, wrap_deg, a, b, scale_frac=0.022,
             sel = top[np.abs(rr - r) < 1e-9]
             if not len(sel):
                 continue
-            tk = (2 * np.pi * k / n_vane
-                  + np.deg2rad(wrap_deg) * (r - a) / (b - a))
+            if r_vane_in is None:
+                tk = (2 * np.pi * k / n_vane
+                      + np.deg2rad(wrap_deg) * (r - a) / (b - a))
+            else:
+                uu = np.log(max(r, r_vane_in) / r_vane_in) / np.log(b / r_vane_in)
+                tk = 2 * np.pi * k / n_vane + sign * np.deg2rad(wrap_deg) * uu
             d = np.angle(np.exp(1j * (th[np.abs(rr - r) < 1e-9] - tk)))
             pts.append(Xd[sel[int(np.argmin(np.abs(d)))]])
         p = np.array(pts)
@@ -524,6 +533,9 @@ def fig1_impeller_modes(npz: Path, out_png: Path, panel_dir: Path | None = None)
              dict(z_band=None, elev=46.0, azim=-58.0, scale_frac=0.022)]
     camber = dict(n_vane=n_vane, wrap_deg=float(d["wrap_deg"]), a=float(d["a"]),
                   b=float(d["b"]))
+    for k_npz, k_arg in (("r_vane_in", "r_vane_in"), ("camber_sign", "sign"), ("z_front_top", "z_top")):
+        if k_npz in d.files:                  # N6(실측 형상) npz — 로그나선 캠버·앞판 윗면
+            camber[k_arg] = float(d[k_npz])
     tags = ["(a)", "(b)", "(c)"]
     #: 패널 머리는 **문자만** 둔다 — 무엇을 보여주는 패널인지는 캡션이 말한다(2026-08-24).
     heads = ["", "", ""]
@@ -580,6 +592,9 @@ def fig1_impeller_modes(npz: Path, out_png: Path, panel_dir: Path | None = None)
 
 
 # ------------------------------------------------------------------ Figure 2 (§4.1)
+#: 3D 노치 arm 키 — `cli a11`이 b2의 베인 폭(정본 `geometry.VANE_WIDTH`, G3 3.0 mm; G1 3.2)으로 이름 짓는다.
+ARM_3D = f"c_3d_notch_w{geo.VANE_WIDTH * 1e3:.1f}"
+
 #: Fig 2 (a)의 **네 arm** — `a11_arm_comparison.csv`의 (arm, convention, 커프폭 mm) 키와
 #: 라벨·색. 3D는 as-built 커프(0.25 mm)·베인폭 4.1 mm 열만 쓴다 — 1 mm 커프는 §4.1이
 #: 폭 효과의 괄호로만 인용하므로 지문 비교선에 섞으면 같은 ā에 두 점이 생긴다(`fig_kerf`의
@@ -591,7 +606,7 @@ FIG2_ARMS: tuple = (
      r"Rotational spring, Tada $c_\theta$", "C1"),
     ("d_2d_stress_slit", "fem", 0.0,
      "2D plane stress, zero-width slit", "C2"),
-    ("c_3d_notch_w4.1", "fem", 0.25,
+    (ARM_3D, "fem", 0.25,
      "3D solid, as-built notch (0.25 mm kerf)", "C3"),
 )
 
@@ -603,7 +618,7 @@ FIG2_PATTERN: tuple = (
     ("a_exact_spring_EB", "tada", 0.0, "Spring, Tada (Mode-I only)", "C1", "s"),
     ("b_timoshenko_modeI+II", "tada", 0.0, "Spring + Mode-II sliding", "C4", "v"),
     ("d_2d_stress_slit", "fem", 0.0, "2D zero-width slit", "C2", "o"),
-    ("c_3d_notch_w4.1", "fem", 0.25, "3D as-built notch", "C3", "^"),
+    (ARM_3D, "fem", 0.25, "3D as-built notch", "C3", "^"),
 )
 
 #: 정본 §4.1의 판별비 진술이 서 있는 균열깊이(“Matched on the elastic ā = 0.5 crack”).

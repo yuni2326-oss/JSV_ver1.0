@@ -210,6 +210,22 @@ class TestDataPackage:
         assert args.func is cli.cmd_datapackage
         assert args.out.endswith("supplementary-data.zip")
 
+    def test_datapackage_without_manuscript_bundles_every_artifact(self, tmp_path, capsys):
+        """T-D5 — 원고 없는 배포본(공개 저장소)에서도 README가 안내하는 `cli datapackage`가 돈다.
+        인용 목록을 뽑을 원고가 없으면 데이터 폴더의 산출물 전부를 묶고 그렇게 했다고 알린다."""
+        import zipfile
+        from impeller_fingerprint import cli
+        data, figs = self._dirs(tmp_path)
+        (data / "notes.txt").write_text("not an artifact\n")
+        out = tmp_path / "pkg.zip"
+        args = cli.build_parser().parse_args(["datapackage", "--canon", str(tmp_path / "absent.md"),
+                                              "--data", str(data), "--figs", str(figs), "--out", str(out)])
+        args.func(args)
+        with zipfile.ZipFile(out) as z:
+            names = set(z.namelist())
+        assert names == {"MANIFEST.md", "x1_cited.csv", "x2_uncited.csv", "figures/fig_x.pdf"}
+        assert "not found" in capsys.readouterr().out
+
 
 class TestDocxConverterBoundary:
     """`--docx`가 부르는 **외부 변환기**의 경계 — 배포본에는 그 파일이 없다.

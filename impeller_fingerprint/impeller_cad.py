@@ -26,20 +26,26 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from . import geometry as geo
+
+
+_AB = geo.ASBUILT
+
 
 @dataclass(frozen=True)
 class ImpellerSpec:
     """폐쇄형 임펠러 대리형상 파라미터 (SI, m)."""
 
-    r_out: float = 0.03656          # R₂ (실측 D₂/2)
-    r_eye: float = 0.01540          # R₁ 흡입구 (실측 D₁/2)
-    channel_gap: float = 0.0041     # 유로폭 b₂ (**실측**) = 전·후면 슈라우드 사이 높이
-    t_front: float = 0.0010         # 전면 슈라우드 판 두께 (**실측** 1.0)
-    t_back: float = 0.0010          # 후면 슈라우드 판 두께 (**실측** 1.0)
+    # 정본 `geometry.ASBUILT`(G3 표준 두께; G1은 `ASBUILT_G1`). 08-13 값(1.0/1.0/4.1/1.0, wrap 90°, r_vin 17)은 `geometry.GEOM_0813`.
+    r_out: float = _AB.b            # R₂ (외경/2)
+    r_eye: float = _AB.a            # R₁ 흡입구 반경
+    channel_gap: float = _AB.gap    # 두 판 안쪽 간격 3.00 mm = 깃 높이
+    t_front: float = _AB.t_front    # 앞판(흡입구 쪽) 0.40 mm
+    t_back: float = _AB.t_back      # 뒤판(허브 쪽) 0.60 mm
     n_vane: int = 6                 # 스폿용접 궤적으로 확인
-    t_vane: float = 0.0010          # 베인 판 두께 (**실측** 1.0, 같은 판재)
-    r_vane_in: float = 0.0170       # 베인 입구 반경 (**미확정**, 스윕 16–19 mm)
-    wrap_deg: float = 90.0          # 후곡 wrap 각 (**미확정**, 스윕 60–120°)
+    t_vane: float = _AB.t_vane      # 깃 두께 1.0 mm
+    r_vane_in: float = _AB.r_vane_in  # 베인 입구 반경 15 mm(앞전이 흡입구 테 바로 안쪽)
+    wrap_deg: float = _AB.wrap_deg  # wrap 62° (앞판 용접 자국 베인각 50.5°)
     damage_vane: int = -1           # 손상 베인 인덱스(-1 = 건전)
     damage_frac: float = 0.0        # 국소 두께 감소율 (0.6 = 60 % 얇아짐)
     damage_span: tuple = (0.0, 0.25)  # 손상 구간(베인 스팬 분율, 0=입구/뿌리)

@@ -9,7 +9,7 @@ import pytest
 
 from impeller_fingerprint import massload as ml
 from impeller_fingerprint import rail3d as r3
-from impeller_fingerprint.geometry import B2_CHANNEL, VANE
+from impeller_fingerprint.geometry import VANE, VANE_WIDTH
 
 
 class TestFormula:
@@ -77,7 +77,7 @@ class TestAnalyticAnchor:
 
     @pytest.fixture(scope="class")
     def vane(self):
-        L, w, h = VANE.L, B2_CHANNEL, VANE.h
+        L, w, h = VANE.L, VANE_WIDTH, VANE.h
         c, cn, _ = r3.vane_mesh(L=L, w=w, h=h, nx=40, ny=3, nz=6)
         res = r3.solve_modes(c, cn, VANE.E, VANE.nu, VANE.rho, r3.clamp_root(),
                              n_modes=4, order=2, keep_shapes=True)
@@ -97,7 +97,7 @@ class TestAnalyticAnchor:
         assert res.field_coors[d["node"], 0] == pytest.approx(VANE.L, abs=1e-9)
 
     def test_coupon_limit_is_sub_milligram(self, vane):
-        """as-built 쿠폰(0.98 g)에서 floor 절반 예산의 한계는 **1 mg 미만**이다 —
+        """as-built 쿠폰(30 × 3.2 × 1.2 mm, 0.92 g)에서 floor 절반 예산의 한계는 **1 mg 미만**이다 —
         접촉센서가 원천 배제된다는 §5 E2의 판정 근거."""
         res, _ = vane
         d = ml.mode_phi2_max(res.full_shapes[0], res.field_coors)

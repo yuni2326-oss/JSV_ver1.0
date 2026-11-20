@@ -29,7 +29,9 @@ def _residual_fn(y, pool, plate, whiten, w, exact, modes, mass=False):
         xi, s_bar = float(p[0]), float(p[1])
         ww = float(p[2]) if len(p) > 2 else w
         if exact:
-            eta = fwd.eta_bar_exact(plate, modes, xi, s_bar, ww)
+            # 질량항을 함께 넘긴다 — 빠뜨리면 정확재해가 강성전용으로 조용히 바뀐다
+            # (R1 수정 2026-10-06 발견; 생산 MC는 exact=False라 영향이 없었다).
+            eta = fwd.eta_bar_exact(plate, modes, xi, s_bar, ww, mass=mass)
         elif mass:
             eta = fwd.eta_bar_linear_mass(pool, xi, s_bar, ww, plate,
                                           coupling=fwd.resolve_coupling(mass))

@@ -1,7 +1,8 @@
 case,f1_flap_Hz,f2_flap_Hz,f3_flap_Hz,ndof,damage,note
-isolated_vane_healthy,886.9,5528.6,11466.4,68040,none,"as-built coupon 30x4.1x1.0, root clamp"
-isolated_vane_60pct_root_thinning,265.6,3563.6,4635.9,58644,"60% thickness over x/L in [0,0.25]",same damage idealization as the assembly sweep
-shift_pct,-70.052,-35.544,-59.57,,,isolated-vane shifts
-assembly_pair_mean_1p2mm,-0.787,,,278520,same 60% root thinning,b5 asbuilt
-assembly_pair_mean_1p0mm,-1.075,,,385176,same 60% root thinning,b5 mesh refinement
-dilution_factor,65.2-89.0,,,,,matched damage; previous 15-30x compared a sharp crack with root thinning
+isolated_vane_healthy,885.053177963905,5517.981444884414,15332.07914052532,68040.0,none,"as-built coupon 30x3.0x1.0, root clamp; kinds flap,edge,flap,torsion,flap,edge"
+isolated_vane_60pct_root_thinning,264.3570431534926,3552.4911138103794,10614.836272475626,58644.0,"60% thickness over x/L in [0,0.25]",same damage idealization as the assembly (one-sided removal; I about the shifted centroid)
+shift_pct,-70.13094244103445,-35.61973433049857,-30.767144004502367,,—,isolated-vane shifts
+assembly_pair_mean_installed,-1.3911814963774805,,,456984.0,same 60% root thinning (symmetric about the camber),"exact C6 hex, installed (hub clamped); h1:m1n0 at 856 Hz, split 1.977% of f"
+dilution_factor_installed,50.411066150354586,,,,—,coupon f1 shift / assembly pair-mean shift (matched damage)
+assembly_pair_mean_rail_support,-0.3028696507344164,,,402048.0,same 60% root thinning (symmetric about the camber),"exact C6 hex, rail support (r = a clamped); h1:m1n0 at 3144 Hz, split 0.570% of f"
+dilution_factor_rail_support,231.55486946604506,,,,—,coupon f1 shift / assembly pair-mean shift (matched damage)

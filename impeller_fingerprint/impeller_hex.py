@@ -30,6 +30,7 @@ import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 
+from . import geometry as geo
 from . import rail3d as r3
 
 #: 8절점 육면체 모절점(ξ,η,ζ) 순서 — sfepy `3_8`과 같은 규약(`rail3d._HEX_OFFSETS`).
@@ -37,18 +38,22 @@ _CORNERS = np.array([[-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1],
                      [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]], dtype=float)
 
 
+_AB = geo.ASBUILT
+
+
 @dataclass(frozen=True)
 class HexImpellerSpec:
     """Fig 1 임펠러 파라미터 (SI, m). 기하는 실측, 메시는 노출된 파라미터."""
 
-    # --- 기하(실측 단면) ---
-    a: float = 0.01540              # 환형 내경 R₁ (흡입구)
-    b: float = 0.03656              # 환형 외경 R₂
-    t_sheet: float = 0.0010         # 판두께(양 슈라우드)  **실측**
-    channel: float = 0.0041         # 유로폭 b₂           **실측**
-    t_vane: float = 0.0010          # 베인 판두께          **실측**
+    # --- 기하(정본 `geometry.ASBUILT` = G3 표준 두께; G1은 `ASBUILT_G1`, 08-13 값은 `geometry.GEOM_0813`) ---
+    a: float = _AB.a                # 환형 내경 R₁ (흡입구 반경)
+    b: float = _AB.b                # 환형 외경 R₂ (외경/2)
+    t_front: float = _AB.t_front    # 앞판(z 위쪽, 흡입구 쪽) 0.40 mm
+    t_back: float = _AB.t_back      # 뒤판(z 아래쪽, 허브 쪽) 0.60 mm
+    channel: float = _AB.gap        # 두 판 안쪽 간격 3.00 mm
+    t_vane: float = _AB.t_vane      # 깃 두께 1.0 mm
     n_vane: int = 6                 # 베인 수 (스폿용접 궤적으로 확인)
-    wrap_deg: float = 60.0          # 베인 wrap 각 (**미확정**, 스윕)
+    wrap_deg: float = _AB.wrap_deg  # 베인 wrap 각(용접 자국 베인각 50.5° → 62°, 선형 캠버로 근사)
     # --- 물성 ---
     E: float = 193e9
     nu: float = 0.29
@@ -81,7 +86,7 @@ class HexImpellerSpec:
                 "격자가 C_n_vane 대칭을 정확히 보존하지 못해 대칭성 판정이 오염된다")
         if self.vane_mode not in ("discrete", "web"):
             raise ValueError(f"vane_mode: {self.vane_mode}")
-        if self.channel <= 0 or self.t_sheet <= 0:
+        if self.channel <= 0 or self.t_front <= 0 or self.t_back <= 0:
             raise ValueError("두께/유로폭이 양수여야 한다")
         if self.vane_arc_cells is not None:
             lim = self.n_theta // max(self.n_vane, 1)
@@ -129,22 +134,34 @@ class HexImpellerSpec:
         return 1.0 - self.vane_arc_cells / self.cells_per_sector
 
     @property
+    def t_sheet(self) -> float:
+        """하위호환 — 뒤판 두께(유로층이 시작하는 z). 같은 두께 기하에서는 판두께 그 자체."""
+        return self.t_back
+
+    @property
     def total_thickness(self) -> float:
-        """림 전체두께 = b₂ + 2t (파생값)."""
-        return self.channel + 2 * self.t_sheet
+        """림 전체두께 = 간격 + 앞판 + 뒤판 (파생값)."""
+        return self.channel + self.t_front + self.t_back
 
     @property
     def face_separation(self) -> float:
-        """면판 중립면 간격 s = b₂ + t."""
-        return self.channel + self.t_sheet
+        """면판 중심 간격 d = 간격 + (앞판 + 뒤판)/2."""
+        return self.channel + 0.5 * (self.t_front + self.t_back)
 
     @property
     def z_breaks(self) -> np.ndarray:
         """z 절점 좌표 — [후면 슈라우드 | 유로 | 전면 슈라우드]."""
-        t, c = self.t_sheet, self.channel
-        back = np.linspace(0.0, t, self.n_z_shroud + 1)
-        chan = np.linspace(t, t + c, self.n_z_channel + 1)[1:]
-        front = np.linspace(t + c, 2 * t + c, self.n_z_shroud + 1)[1:]
+        c = self.channel
+        if self.t_front == self.t_back:              # 같은 두께면 08-13 식 그대로(비트 보존)
+            t = self.t_back
+            back = np.linspace(0.0, t, self.n_z_shroud + 1)
+            chan = np.linspace(t, t + c, self.n_z_channel + 1)[1:]
+            front = np.linspace(t + c, 2 * t + c, self.n_z_shroud + 1)[1:]
+            return np.concatenate([back, chan, front])
+        tb, tf = self.t_back, self.t_front
+        back = np.linspace(0.0, tb, self.n_z_shroud + 1)
+        chan = np.linspace(tb, tb + c, self.n_z_channel + 1)[1:]
+        front = np.linspace(tb + c, tb + c + tf, self.n_z_shroud + 1)[1:]
         return np.concatenate([back, chan, front])
 
     @property
@@ -311,7 +328,7 @@ def assemble(spec: HexImpellerSpec, coors, conn):
 def analytic_mass(spec: HexImpellerSpec) -> float:
     """총질량 해석 추정 — 슈라우드 2장 + 베인 N매(캠버선 길이 적분). 자기검증용."""
     A_ann = math.pi * (spec.b ** 2 - spec.a ** 2)
-    m_shroud = spec.rho * 2 * A_ann * spec.t_sheet
+    m_shroud = spec.rho * A_ann * (spec.t_front + spec.t_back)
     if spec.vane_mode == "web":
         return m_shroud + spec.rho * A_ann * spec.channel
     r = np.linspace(spec.a, spec.b, 400)

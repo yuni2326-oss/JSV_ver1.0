@@ -1,0 +1,7 @@
+# 앞판 두께·단차 기록(42번 채택 순서). gap1–6 = 포인트 마이크로미터, 출구 끝에서 약 2 mm 안쪽 깃 사이(gap k = 깃 k와 k+1 사이) [mm].
+# step_gap1–6·step_v1–6 = 레버식 다이얼 게이지(측정력 ≤ 0.1 N) 단차 [µm]: 창 안쪽 경계(r 32.15 mm) 가운데에서 창 안팎을 잰다. 건전(A)에서 기준을 잰다.
+# (11-17) 줄인 B: L1a·L1은 하지 않는다. A는 가공 직전(A2b 뒤)에 잰 기준이다. L6에서 step_gap1–6, R에서 step_v1–6을 잰다(창마다 ±20 % 안인지).
+state,gap1_mm,gap2_mm,gap3_mm,gap4_mm,gap5_mm,gap6_mm,step_gap1_um,step_gap2_um,step_gap3_um,step_gap4_um,step_gap5_um,step_gap6_um,step_v1_um,step_v2_um,step_v3_um,step_v4_um,step_v5_um,step_v6_um,micrometer,gauge,notes
+A,,,,,,,,,,,,,,,,,,,,,가공 직전(A2b 뒤) 기준
+L6,,,,,,,,,,,,,,,,,,,,,깃 사이 여섯
+R,,,,,,,,,,,,,,,,,,,,,깃 위 여섯(step_v)

@@ -1,0 +1,21 @@
+{
+ "key": "fit24x12v1z2c2w55",
+ "git": "cd68430",
+ "ndof": 232416,
+ "n_modes": 80,
+ "a": 0.01489,
+ "b": 0.036465,
+ "t_front": 0.0004,
+ "t_back": 0.0006,
+ "channel": 0.003,
+ "t_vane": 0.001,
+ "wrap_deg": 55.0,
+ "r_vane_in": 0.015,
+ "s_probe": 0.001,
+ "dxi": 0.01,
+ "w": 0.003,
+ "support": "inner-edge clamp r=a",
+ "damage": "front-shroud outer-face thinning, exact two-flange d_K\u2192p",
+ "rho": 7930.0,
+ "seconds_scan": 655.0983340740204
+}

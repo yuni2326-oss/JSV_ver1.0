@@ -1,0 +1,30 @@
+{
+ "key": "ff32x16h6w62c40",
+ "git": "1ac329d",
+ "ndof": 459738,
+ "n_modes": 80,
+ "rigid_Hz": [
+  0.0,
+  0.0,
+  0.0,
+  0.0035923262258391888,
+  0.004948652018719792,
+  0.011212960577827839
+ ],
+ "mass_model_g": 36.777271612831264,
+ "mass_measured_g": 40.2059,
+ "a": 0.014955,
+ "b": 0.036515,
+ "r_bore": 0.006335,
+ "t_front": 0.000375,
+ "t_back": 0.00059,
+ "channel": 0.00318,
+ "t_vane": 0.0012,
+ "wrap_deg": 62.0,
+ "r_vane_in": 0.015,
+ "collar_t": 0.000425,
+ "collar_h": 0.004,
+ "support": "free-free (no constraint)",
+ "joint": "vane\u2013shroud continuous (idealization of spot/projection welds)",
+ "hub": "flat back-plate annulus to the bore (embossed bead idealized as flat)"
+}

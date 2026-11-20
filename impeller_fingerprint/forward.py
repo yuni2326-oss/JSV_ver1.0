@@ -46,8 +46,8 @@ def resolve_coupling(mass):
     허용값:
       - ``"exact"``  : d_M = 1−(1−d_K)^{1/3}. **생산 규약**(A2·A3·A4·A5·B1 전부 이 값).
         균일두께판(레일 기하, 설계서 §5.2)에서 두께제거의 **정확한** 결합이다.
-      - ``"sandwich"``: d_M = d_K/(1+d_K). 면판 2장 샌드위치의 **한쪽 면판**을 가공할 때의
-        결합(설계서 §5.3 유도). 레일 결과를 실물 슈라우드로 이전할 때만 쓴다 —
+      - ``"sandwich"``: d_M = d_K/(r+d_K), r = t_back/t_front. 면판 2장 샌드위치의 **한쪽 면판**을 가공할 때의
+        결합(설계서 §5.3 유도, 얇은면판 극한; 같은 두께면 d_K/(1+d_K)). 레일 결과를 실물 슈라우드로 이전할 때만 쓴다 —
         **생산 산출물은 이 법칙으로 계산하지 않았다**.
       - 숫자         : d_M = coupling · d_K (선형 결합비). 0이면 강성전용과 동일.
       - ``True``     : 하위호환 별칭 → ``MASS_COUPLING`` = 1/3 (p→0 선행차수 근사).
@@ -75,28 +75,26 @@ def mass_field_exact(d_K: np.ndarray) -> np.ndarray:
     return 1.0 - (1.0 - d) ** (1.0 / 3.0)
 
 
-def mass_field_sandwich(d_K: np.ndarray) -> np.ndarray:
-    """**샌드위치**(면판 2장) 슈라우드의 한쪽 면판을 가공할 때의 질량손실장 (설계서 §5.3).
+def mass_field_sandwich(d_K: np.ndarray, ratio: float | None = None) -> np.ndarray:
+    """**샌드위치**(면판 2장) 슈라우드의 한쪽 면판을 가공할 때의 질량손실장 — 얇은면판 극한 (설계서 §5.3).
 
-    면판 두께 t_f, 중심간 거리 s, 손상면판을 외면에서 p·t_f 제거하면 두 플랜지 단면의
-    관성모멘트는 I = t₁t₂s²/(t₁+t₂)(자체관성 무시)이므로
+    손상면 두께 t_d, 반대면 t_o, 면판 자체관성을 무시하면 단면 2차모멘트는 I = μd², μ = t_d t_o/(t_d + t_o)이다.
+    손상면을 바깥에서 p·t_d 제거하면(d 고정)
 
-        d_K = 1 − 2(1−p)/(2−p) = p/(2−p)      (**s에 무관**),   d_M = p/2
+        d_K = p·t_o/[t_d(1−p) + t_o],   d_M = p·t_d/(t_d + t_o)   ⇒   **d_M = d_K/(r + d_K)**, r = t_o/t_d.
 
-    즉 **d_M = d_K/(1+d_K)**. 얇은면판 극한의 1차 보정은
-    d_K ≈ [p/(2−p)]·[1 + 2(1−p)·t_f/s]이지만, 결합법칙 d_M(d_K)는 그 보정을 받아도
-    형태가 유지된다(둘 다 p의 함수이므로 s 의존이 상쇄되지 않는 것은 d_K(p)뿐이다).
-
-    균일두께판(레일)의 정확결합 `mass_field_exact`와 비교하면 같은 d_K에서 질량손실이
-    **2.6–3.0배 크다**(d_K = 0.1/0.01에서 2.63/2.96배) — 판 법칙 D ∝ t³ 대신
-    샌드위치 법칙 D_eff ∝ t_face·s²(면판두께에 **선형**)이 성립하기 때문이다.
+    같은 두께(r = 1)면 d_M = d_K/(1+d_K)(r3.9 §3.3의 공표 법칙). 기본 r은 정본 뒤판/앞판 = 0.60/0.40 = 1.5(G3; G1은 0.59/0.375 = 1.573)
+    (2026-10-16, 앞판이 손상면). 질량효과의 **상계**다 — 면판 자체관성·중립면 이동을 넣은 정확 단면
+    (`mass_field_sandwich_asbuilt`)은 같은 d_K에서 질량손실이 더 작다.
     """
+    from . import geometry as _geo
+    r = (_geo.T_BACK / _geo.T_FRONT) if ratio is None else float(ratio)
     d = np.clip(np.asarray(d_K, dtype=float), 0.0, None)
-    return d / (1.0 + d)
+    return d / (r + d)
 
 
 def sandwich_I(p, t_f: float, s: float):
-    """면판 2장 단면의 **정확한** 단위폭 2차모멘트 I(p) — 면판 자체관성과 중립면 이동 포함.
+    """같은 두께 면판 2장 단면의 **정확한** 단위폭 2차모멘트 I(p) — 면판 자체관성과 중립면 이동 포함.
 
     두 면(두께 t_f)이 중립면 간격 s로 떨어져 있고, 손상면을 **외면에서** p·t_f 제거한다.
     두 면적의 관성은 Σ A_i(z_i−z̄)² = (A₁A₂/(A₁+A₂))·d², d = 면 중심간 거리 = s − p·t_f/2:
@@ -104,56 +102,84 @@ def sandwich_I(p, t_f: float, s: float):
         I(p) = (t_f³/12)[(1−p)³ + 1] + t_f·(1−p)/(2−p) · (s − p·t_f/2)²
 
     p=0에서 I₀ = t_f³/6 + t_f s²/2이고, t_f/s → 0에서 얇은면판 닫힌형 t_f s²/2로 수렴한다.
+    비대칭 면판(실측 정본)은 `two_face_I`를 쓴다 — t_d = t_o = t_f, gap = s − t_f이면 이 식과 같다.
     """
     p = np.asarray(p, dtype=float)
     return ((t_f ** 3 / 12.0) * ((1.0 - p) ** 3 + 1.0)
             + t_f * (1.0 - p) / (2.0 - p) * (s - p * t_f / 2.0) ** 2)
 
 
-def sandwich_dk_from_depth(p, t_f: float = None, s: float = None):
-    """깊이비 p → 강성손실 d_K = 1 − I(p)/I(0) (as-built 정확 단면).
-
-    기본 t_f·s는 **실측값**(geometry.T_SHEET, geometry.FACE_SEPARATION)이다. 실측 t_f/s = 0.196은
-    얇은면판 극한이 아니므로 선행차수 d_K = p/(2−p)는 d_K를 19–39 % 과소평가한다(설계서 F60).
-    """
-    from . import geometry as _geo
-    t_f = _geo.T_SHEET if t_f is None else t_f
-    s = _geo.FACE_SEPARATION if s is None else s
+def sandwich_dk_from_depth(p, t_f: float, s: float):
+    """같은 두께 면판 2장: 깊이비 p → 강성손실 d_K = 1 − I(p)/I(0) (08-13 규약, `GEOM_0813` 재현용)."""
     return 1.0 - sandwich_I(p, t_f, s) / float(sandwich_I(0.0, t_f, s))
 
 
-def sandwich_depth_from_dk(d_K, t_f: float = None, s: float = None,
-                           n_table: int = 200001):
-    """d_K → 깊이비 p (위 함수의 역). 단조 표 보간 + Newton 2회로 1e-12 수준까지 조인다."""
-    from . import geometry as _geo
-    t_f = _geo.T_SHEET if t_f is None else t_f
-    s = _geo.FACE_SEPARATION if s is None else s
+def _invert_monotone(fn, d_K, n_table: int = 200001):
+    """단조증가 fn: [0, 1] → d_K의 역 — 표 보간 + Newton 2회(중심차분)로 1e-12 수준까지 조인다."""
     d = np.clip(np.asarray(d_K, dtype=float), 0.0, None)
     pg = np.linspace(0.0, 1.0, n_table)
-    dg = sandwich_dk_from_depth(pg, t_f, s)
-    p = np.interp(d, dg, pg)                       # dg는 p에 대해 단조증가
-    for _ in range(2):                             # Newton 정련(해석 미분 대신 중심차분)
+    dg = fn(pg)
+    p = np.interp(d, dg, pg)
+    for _ in range(2):
         h = 1e-7
-        f = sandwich_dk_from_depth(p, t_f, s) - d
-        fp = (sandwich_dk_from_depth(np.clip(p + h, 0, 1), t_f, s)
-              - sandwich_dk_from_depth(np.clip(p - h, 0, 1), t_f, s)) / (2 * h)
+        f = fn(p) - d
+        fp = (fn(np.clip(p + h, 0, 1)) - fn(np.clip(p - h, 0, 1))) / (2 * h)
         p = np.clip(p - np.where(np.abs(fp) > 0, f / fp, 0.0), 0.0, 1.0)
     return p
 
 
-def mass_field_sandwich_asbuilt(d_K: np.ndarray) -> np.ndarray:
-    """**as-built 샌드위치** 결합법칙 — 실측 t_f = 1.0 mm, s = 5.1 mm(설계서 F60).
+def sandwich_depth_from_dk(d_K, t_f: float, s: float, n_table: int = 200001):
+    """같은 두께 면판 2장: d_K → 깊이비 p (`sandwich_dk_from_depth`의 역)."""
+    return _invert_monotone(lambda p: sandwich_dk_from_depth(p, t_f, s), d_K, n_table)
 
-    얇은면판 닫힌형 d_M = d_K/(1+d_K)는 t_f/s → 0 극한이고 **질량효과의 상계**다(정본 §3.3).
-    실측 t_f/s = 0.196에서는 면판 자체관성과 중립면 이동 때문에 같은 p가 더 큰 d_K를 내므로,
-    같은 d_K에서의 질량손실은 상계보다 작다: d_M = p(d_K)/2, ζ = d_M/d_K ≈ 0.63–0.70
-    (얇은면판 0.75–0.97, 균일판 1/3).
+
+def two_face_I(p, t_d: float, t_o: float, gap: float):
+    """비대칭 두 면판의 단위폭 단면 2차모멘트 [m³] — 합성 도심 기준, 면판 자체관성 포함.
+
+    손상면(두께 t_d)을 바깥면에서 깊이비 p만큼 깎고(t_d' = t_d(1−p)), 반대면 t_o와 안쪽면 간격 gap은 고정:
+
+        I(p) = t_d'³/12 + t_o³/12 + μ d²,   μ = t_d' t_o/(t_d' + t_o),   d = gap + (t_d' + t_o)/2.
     """
-    return 0.5 * sandwich_depth_from_dk(d_K)
+    p = np.asarray(p, dtype=float)
+    td = t_d * (1.0 - p)
+    d = gap + 0.5 * (td + t_o)
+    return td ** 3 / 12.0 + t_o ** 3 / 12.0 + td * t_o / (td + t_o) * d ** 2
+
+
+def _two_face_args(t_d, t_o, gap):
+    from . import geometry as _geo
+    return (_geo.T_FRONT if t_d is None else t_d, _geo.T_BACK if t_o is None else t_o,
+            _geo.GAP if gap is None else gap)
+
+
+def two_face_dk_from_depth(p, t_d: float | None = None, t_o: float | None = None,
+                           gap: float | None = None):
+    """깊이비 p → 강성손실 d_K = 1 − I(p)/I(0). 기본은 정본(G3: 앞판 0.40 손상, 뒤판 0.60, 간격 3.00 mm)."""
+    t_d, t_o, gap = _two_face_args(t_d, t_o, gap)
+    return 1.0 - two_face_I(p, t_d, t_o, gap) / float(two_face_I(0.0, t_d, t_o, gap))
+
+
+def two_face_depth_from_dk(d_K, t_d: float | None = None, t_o: float | None = None,
+                           gap: float | None = None, n_table: int = 200001):
+    """d_K → 깊이비 p (`two_face_dk_from_depth`의 역)."""
+    t_d, t_o, gap = _two_face_args(t_d, t_o, gap)
+    return _invert_monotone(lambda p: two_face_dk_from_depth(p, t_d, t_o, gap), d_K, n_table)
+
+
+def mass_field_sandwich_asbuilt(d_K: np.ndarray) -> np.ndarray:
+    """**as-built 샌드위치** 결합법칙 — 정본(G3, 2026-10-30): 앞판 t_d = 0.40 mm를 깎고 뒤판 0.60 mm, 간격 3.00 mm
+    (G1은 0.375/0.59/3.18 mm).
+
+    d_M = p(d_K)·t_d/(t_d + t_o). 작은 깊이에서 ζ = d_M/d_K = 0.56(G1 0.545, 얇은면판 극한 0.67, 균일판 1/3,
+    08-13 기하 0.71). 판이 비대칭이라 **어느 면을 깎느냐**가 결합비를 정한다(두꺼운 뒤판을 깎으면 ζ ≈ 1.09).
+    """
+    from . import geometry as _geo
+    p = two_face_depth_from_dk(d_K)
+    return p * _geo.T_FRONT / (_geo.T_FRONT + _geo.T_BACK)
 
 
 #: 문자열로 지정하는 비선형 결합법칙 — 숫자 결합비(d_M = c·d_K)와 구분한다.
-#: `sandwich`는 얇은면판 극한(정본 §3.3의 공표 법칙), `sandwich_asbuilt`는 실측 t_f/s 반영.
+#: `sandwich`는 얇은면판 극한(정본 뒤판/앞판 비 r = 1.5), `sandwich_asbuilt`는 정본 비대칭 정확 단면.
 MASS_LAWS = {"exact": mass_field_exact, "sandwich": mass_field_sandwich,
              "sandwich_asbuilt": mass_field_sandwich_asbuilt}
 

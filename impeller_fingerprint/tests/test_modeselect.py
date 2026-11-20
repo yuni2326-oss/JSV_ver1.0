@@ -36,20 +36,26 @@ class TestPoolAndMeasurability:
         assert all(r["measurable"] == (r["f_Hz"] <= 2.0e4) for r in rows)
         assert any(r["measurable"] for r in rows)
 
-    def test_radial_order_one_family_is_out_of_band_at_measured_thickness(self, pool):
-        """F59 — 실측 두께(레일 t = 2.0 mm)에서 n=1 족이 20 kHz **밖**으로 나간다.
+    def test_family_pools_reproduce_the_0813_band_sets(self):
+        """G2 결정 D3 — 계열 풀이 08-13 레일 두께(2.0 mm)의 20·25.6 kHz 대역과 **같은 모드 집합**이다.
 
-        옛 두께 1.6 mm에서는 m0n1·m1n1·m2n1이 17.9/18.4/19.9 kHz로 대역 안이었고 A5의
-        D-최적 집합이 그 모드에 의존했다. f ∝ t이므로 ×1.25 되어 22.3/23.0/24.9 kHz가 된다.
+        F59: 레일 t = 2.0 mm에서 n=1 족은 22.3/23.0/24.9 kHz로 20 kHz 밖, 25.6 kHz 안이었다. 실측 두 면판 합
+        0.965 mm에서는 레일 주파수가 ×0.4825라 n=1까지 16 kHz 안에 들어오므로 주파수 컷은 다른 집합을 고른다.
         """
-        rows = ms.pool_table(pool, f_max=2.0e4)
-        assert [r["label"] for r in rows if r["measurable"]] == [
-            "m0n0", "m1n0", "m2n0", "m3n0", "m4n0"]
-        assert all(not r["measurable"] for r in rows if r["n"] == 1)
-        n1 = {r["label"]: r["f_Hz"] for r in rows if r["n"] == 1}
+        old = ker.mode_pool(geo.GEOM_0813.disk(), ms=(0, 1, 2, 3, 4), ns=(0, 1), n_grid=1001)
+        n1 = {k.label: k.f for k in old if k.n == 1}
         assert n1["m0n1"] == pytest.approx(22326.0, rel=2e-3)
         assert n1["m1n1"] == pytest.approx(22965.0, rel=2e-3)
         assert n1["m2n1"] == pytest.approx(24902.0, rel=2e-3)
+        (_, sel20), (_, sel256) = ms.FAMILY_POOLS
+        assert [k.label for k in old if sel20(k)] == [k.label for k in old if k.f <= 2.0e4]
+        assert [k.label for k in old if sel256(k)] == [k.label for k in old if k.f <= 2.56e4]
+
+    def test_rail_frequencies_scale_to_measured_thickness(self, pool):
+        """실측 레일 두께 0.965 mm: 주파수 ∝ t → n=1 계열이 10.8–12.0 kHz."""
+        n1 = {k.label: k.f for k in pool if k.n == 1}
+        assert n1["m0n1"] == pytest.approx(22326.0 * PLATE.t / 0.0020, rel=2e-3)
+        assert all(k.f < 2.0e4 for k in pool)
 
 
 class TestDOptimal:
@@ -141,3 +147,37 @@ class TestMassPropagation:
         for name in ("freq_only", "freq_plus_splitting"):
             assert b[name]["crlb_xi_mm"] == pytest.approx(a[name]["crlb_xi_mm"],
                                                           rel=1e-12), name
+
+
+
+class TestPerSubsetNoise:
+    """R1 수정(2026-10-06): D-최적 탐색은 후보마다 **그 후보의** Σ_y로 det F를 평가해야 한다.
+
+    사고: 생산 경로가 풀 앞 k개 모드의 Σ_y를 모든 후보에 위치 순서대로 썼다 → 25.6 kHz 풀에서
+    단일모드 m0n1(σ = 2√2c)이 쌍평균 σ = 2c를 받아 과대평가되고 D-최적 집합이 바뀌었다.
+    """
+
+    def test_float_sigma_equals_explicit_per_subset_search(self):
+        from itertools import combinations
+        pool = sorted([ker.mode_kernel(PLATE, m=m, n=n) for m in range(5) for n in (0, 1)],
+                      key=lambda k: k.f)
+        meas = [k for k in pool if k.f <= 2.56e4]
+        theta, c = (0.5, 0.05), 1e-3
+        best = ms.d_optimal_subset(meas, PLATE, theta, W, c, k=4, mass="exact")
+        ref = None
+        for comb in combinations(range(len(meas)), 4):
+            sub = [meas[i] for i in comb]
+            m = ms.subset_metrics(sub, PLATE, theta, W, noi.sigma_y_for_modes(sub, c), mass="exact")
+            if ref is None or m["det_F"] > ref[0]:
+                ref = (m["det_F"], [s.label for s in sub])
+        assert best["labels"] == ref[1]
+        # 단일모드(m = 0)를 쌍평균 잡음으로 다루지 않으면 doublet만으로 된 집합이 이긴다
+        assert best["labels"] == ["m1n0", "m2n0", "m1n1", "m2n1"]
+
+    def test_compare_mode_sets_uses_per_subset_noise(self):
+        pool = sorted([ker.mode_kernel(PLATE, m=m, n=n) for m in range(5) for n in (0, 1)],
+                      key=lambda k: k.f)
+        rows = {r["set"]: r for r in ms.compare_mode_sets(PLATE, pool, (0.5, 0.05), W, 1e-3,
+                                                          f_max=2.56e4, mass="exact")}
+        assert rows["d_optimal_4"]["labels"] == ["m1n0", "m2n0", "m1n1", "m2n1"]
+        assert rows["d_optimal_4"]["crlb_xi_mm"] == pytest.approx(0.1624, abs=5e-4)

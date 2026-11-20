@@ -189,3 +189,23 @@ class TestProfileAndGrid:
         i, j = np.unravel_index(int(np.argmin(chi2)), chi2.shape)
         assert xi_grid[i] == pytest.approx(xi_t, abs=0.03)
         assert s_grid[j] == pytest.approx(s_t, abs=0.003)
+
+
+
+def test_exact_fit_passes_mass_term():
+    """R1 수정(2026-10-06): exact=True 적합이 질량포함 정확재해로 생성한 자료를 복원해야 한다.
+
+    질량항을 넘기지 않던 때는 같은 자료를 강성전용 정확맵으로 적합해 위치가 어긋났다.
+    """
+    from impeller_fingerprint import estimator as est
+    from impeller_fingerprint import forward as fwd
+    from impeller_fingerprint import geometry as geo
+    from impeller_fingerprint import kernels as ker
+    from impeller_fingerprint import noise as noi
+    modes = [(0, 0), (1, 0), (2, 0), (3, 0)]
+    pool = [ker.mode_kernel(geo.DISK, m=m, n=n) for m, n in modes]
+    y = fwd.eta_bar_exact(geo.DISK, modes, 0.8, 0.05, 0.003, mass="exact")
+    sig = noi.sigma_y_for_modes(pool, 1e-3)
+    out = est.fit(y, pool, geo.DISK, sig, w=0.003, exact=True, modes=modes, mass="exact",
+                  n_starts=4)
+    assert abs(out["xi_d"] - 0.8) < 1e-4 and abs(out["s_bar"] - 0.05) < 1e-5

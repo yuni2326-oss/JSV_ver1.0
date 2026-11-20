@@ -1,0 +1,3 @@
+state,d_lower,se_lower,fem_lower,d_upper,se_upper,fem_upper,split0_Hz,split1_Hz,dsplit_pct,fem_dsplit_pct,se_dsplit
+T-a,0.01605,0.06832,-0.005464,-0.1243,0.01988,-0.1503,6.011,3.008,-0.1405,-0.1449,0.07115
+T-b,-0.2114,0.07544,-0.2076,-0.01725,0.01406,-0.002578,6.011,10.15,0.1938,0.2051,0.07674

@@ -78,8 +78,17 @@ def _canon_number() -> int:
     raise AssertionError("CANON_FIGURES에 fig2_crack_signature.png이 없다")
 
 
+def _skip_if_not_canon_geometry():
+    """정본 md(v2.1)의 본문·캡션 수치는 08-13 기하(베인 1.0 × 4.1 mm)의 산출물로 쓰였다. G1 실측 형상
+    (1.2 × 3.2 mm) 데이터에서는 그 대조가 성립하지 않으므로 건너뛴다 — 수정본(r4.x) 수치의 대조는
+    `test_rev1_g1_manuscript.py`가 맡는다."""
+    if ARMS_CSV.exists() and "c_3d_notch_w4.1" not in set(pd.read_csv(ARMS_CSV).arm):
+        pytest.skip("G1 데이터 — 정본 md(08-13 기하) 본문 대조는 해당 없음")
+
+
 @pytest.fixture(scope="module")
 def caption():
+    _skip_if_not_canon_geometry()
     if not CANON.exists():
         pytest.skip(f"정본 md 없음: {CANON}")
     n = _canon_number()
@@ -92,6 +101,7 @@ def caption():
 @pytest.fixture(scope="module")
 def body():
     """§4.1의 균열 지문 단락(STATUS NOTE는 옛 수치를 기록하므로 제외)."""
+    _skip_if_not_canon_geometry()
     if not CANON.exists():
         pytest.skip(f"정본 md 없음: {CANON}")
     return "\n".join(ln for ln in CANON.read_text(encoding="utf-8").split("\n")
@@ -119,7 +129,7 @@ class TestSeriesComesFromCsv:
             ("a_exact_spring_EB", "dimarogonas", 0.0),
             ("a_exact_spring_EB", "tada", 0.0),
             ("d_2d_stress_slit", "fem", 0.0),
-            ("c_3d_notch_w4.1", "fem", 0.25)]
+            (F.ARM_3D, "fem", 0.25)]
 
     def test_arm_rows_exist_in_csv(self, arms_csv):
         for arm, conv, w, *_ in F.FIG2_ARMS + F.FIG2_PATTERN:
@@ -161,7 +171,9 @@ class TestSeriesComesFromCsv:
         """T-F2-4 — mode 2는 어디서도 f₁ 이동의 1.1 %를 넘지 않는다."""
         allD = np.concatenate([a["discrim_pct"] for a in series["arms"]])
         assert allD.max() < 1.1, allD
-        assert allD.min() > 0.2, allD
+        # 하한은 "0으로 퇴화하지 않았다"는 확인이다. G3 3D 노치(폭 3.0 mm, ā = 0.25, kerf 0.25 mm)는
+        # Δf₂/f₂가 0.0025 %라 D = 0.08 %다(G1 폭 3.2 mm·깃 1.2 mm에서는 0.23 %).
+        assert allD.min() > 0.05, allD
         # 경쟁 매끄러운 장은 같은 지표에서 한 자리 이상 위여야 판별이 성립한다.
         assert series["gauss"]["discrim_pct"] > 10 * allD.max()
 

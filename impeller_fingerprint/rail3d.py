@@ -278,24 +278,53 @@ def subspace_mac_match(res_h: "ModalResult", idx_h, res_d: "ModalResult",
             "matched": bool(len(sel) == n_take and min(macs[i] for i in sel) >= mac_min)}
 
 
-def beam_mode_kinds(res: "ModalResult") -> list[str]:
-    """보 모드를 형상으로 분류: "flap"(면외 z) / "edge"(폭방향 y) / "axial".
+def beam_mode_kinds(res: "ModalResult", n_bin: int = 60) -> list[str]:
+    """보 모드를 형상으로 분류: "flap"(면외 z) / "edge"(폭방향 y) / "axial" / "torsion".
 
     3D 캔틸레버의 주파수 순서는 보 모델의 모드 순서와 **다르다**(예: 30×2.4×1.2 mm에서
     2번째 3D 모드는 폭방향 굽힘 2110 Hz이고 면외 2차는 6596 Hz). 정본 §3.6이 금지한
     "주파수 순서 매칭"을 피하려면 반드시 형상으로 골라야 한다.
+
+    3D에서는 길이(x) 방향 구간마다 단면 평균 u_z(면외 굽힘), u_y(폭방향 굽힘), u_x(축방향)와
+    u_z의 폭방향 기울기 × 반폭(비틀림)을 만들고 에너지가 가장 큰 장을 고른다.
+    **R1 수정(2026-10-06, F181)**: 이전 판은 성분별 RMS만 보아 폭이 넓은 쿠폰(30 × 4.1 × 1.0 mm)의
+    1차 비틀림(u_z가 폭방향 반대칭)을 "flap"으로 표시했다 — B2·A11의 폭 4.1 mm 행 `f3`이 굽힘 3차가
+    아니라 비틀림이었다. 대칭 굽힘은 단면 평균, 비틀림은 단면 기울기라 둘을 가른다.
 
     2D 평면 단면(x=길이, y=두께)에서는 폭방향 모드가 없으므로 "axial"/"flap"만 쓴다.
     """
     if res.full_shapes is None:
         raise RuntimeError("solve_modes(..., keep_shapes=True) 필요")
     dim = int(res.coors.shape[1])
-    labels = {2: ["axial", "flap"], 3: ["axial", "edge", "flap"]}[dim]
+    if dim == 2:
+        kinds = []
+        for k in range(res.full_shapes.shape[0]):
+            u = res.full_shapes[k].reshape(-1, dim)
+            amp = np.sqrt((u ** 2).sum(axis=0))          # 성분별 RMS
+            kinds.append(["axial", "flap"][int(np.argmax(amp))])
+        return kinds
+    c = res.field_coors if res.field_coors is not None else res.coors
+    x, y = c[:, 0], c[:, 1]
+    span = max(float(x.max() - x.min()), 1e-30)
+    bins = np.clip(((x - x.min()) / span * n_bin).astype(int), 0, n_bin - 1)
+    cnt = np.bincount(bins, minlength=n_bin).astype(float)
+    cnt[cnt == 0] = np.nan
+    ymean = np.bincount(bins, weights=y, minlength=n_bin) / cnt
+    yc = y - ymean[bins]
+    syy = np.bincount(bins, weights=yc * yc, minlength=n_bin)
+    half_w = 0.5 * float(y.max() - y.min())
     kinds = []
     for k in range(res.full_shapes.shape[0]):
-        u = res.full_shapes[k].reshape(-1, dim)
-        amp = np.sqrt((u ** 2).sum(axis=0))          # 성분별 RMS
-        kinds.append(labels[int(np.argmax(amp))])
+        u = res.full_shapes[k].reshape(-1, 3)
+        fields = {
+            "axial": np.bincount(bins, weights=u[:, 0], minlength=n_bin) / cnt,
+            "edge": np.bincount(bins, weights=u[:, 1], minlength=n_bin) / cnt,
+            "flap": np.bincount(bins, weights=u[:, 2], minlength=n_bin) / cnt,
+            "torsion": half_w * np.bincount(bins, weights=u[:, 2] * yc, minlength=n_bin)
+                       / np.where(syy > 0, syy, np.nan),
+        }
+        en = {kk: float(np.nansum(vv ** 2)) for kk, vv in fields.items()}
+        kinds.append(max(en, key=en.get))
     return kinds
 
 

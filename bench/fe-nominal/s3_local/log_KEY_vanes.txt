@@ -1,0 +1,22 @@
+install jax and jaxlib to use terms_jax.py!
+sfepy: WARNING: module /home/super/equip-venv/lib/python3.12/site-packages/sfepy/terms/terms_jax.py cannot be imported!
+sfepy: reason:
+ No module named 'jax'
+[KEY:vanes] 빠진 질량 4.226 g을 vanes에 더함 (α 0.875)
+[KEY:vanes] 459738 DOF, 건전 2171.9–18967.4 Hz, 관측량 53 (247s)
+[KEY:vanes] B ξ0.8–1.0 30° @0° (261s)
+[KEY:vanes] B ξ0.8–1.0 30° @15° (275s)
+[KEY:vanes] B ξ0.8–1.0 30° @30° (290s)
+[KEY:vanes] B ξ0.8–1.0 30° @45° (304s)
+[KEY:vanes] B ξ0.8–1.0 360° @0° (318s)
+[KEY:vanes] B ξ0.8–1.0 360° @15° (333s)
+[KEY:vanes] B ξ0.8–1.0 360° @30° (347s)
+[KEY:vanes] B ξ0.8–1.0 360° @45° (362s)
+[KEY:vanes] C ξ0.2–0.4 30° @0° (376s)
+[KEY:vanes] C ξ0.2–0.4 30° @30° (390s)
+[KEY:vanes] C ξ0.2–0.4 360° @0° (405s)
+[KEY:vanes] R ξ0.9–1.0 8° @0° (419s)
+[KEY:vanes] R ξ0.9–1.0 8° @15° (434s)
+[KEY:vanes] R ξ0.9–1.0 8° @30° (448s)
+[KEY:vanes] R ξ0.9–1.0 8° @45° (462s)
+[KEY:vanes] 끝 (462s)

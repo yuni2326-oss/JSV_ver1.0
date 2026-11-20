@@ -244,14 +244,18 @@ def cmd_a5(args):
     _save(pd.DataFrame(ms.collinearity_report(pool)),
           f"a5_collinearity{suffix}.csv")
     rows = []
-    for f_max in args.f_max:
+    # 후보 풀: 기본은 계열(G2 결정 D3 — 08-13의 20·25.6 kHz 대역과 같은 모드 집합), `--f-max`를 주면 주파수 컷
+    pools = ([(f"f<={f / 1e3:g}kHz", (lambda k, f=f: k.f <= f)) for f in args.f_max]
+             if args.f_max else list(ms.FAMILY_POOLS))
+    for pool_name, sel in pools:
+        f_top = max(k.f for k in pool if sel(k))
         for xi in (0.2, 0.5, 0.8, 0.95):
             for s in (0.01, 0.05):
                 for c in SIGMA_RELS:
                     for r in ms.compare_mode_sets(PLATE, pool, (xi, s), W_GAUSS, c,
-                                                  f_max=f_max, mass=mass):
+                                                  select=sel, mass=mass):
                         rows.append({"xi_d": xi, "s_bar": s, "sigma_rel": c,
-                                     "f_max_kHz": f_max / 1e3,
+                                     "pool": pool_name, "f_max_kHz": f_top / 1e3,
                                      **{k: v for k, v in r.items() if k != "labels"},
                                      "labels": "|".join(r["labels"]),
                                      "pool_ms": "|".join(str(m) for m in pool_ms),
@@ -1142,35 +1146,43 @@ def cmd_a10(args):
     D_eff ∝ t₁t₂s²/(t₁+t₂) → d_K = p/(2−p), d_M = p/2, 즉 **d_M = d_K/(1+d_K)** 다.
     두 법칙이 ξ*·e_pert·CRLB·E3 가공깊이 예측을 각각 얼마나 움직이는지 산출한다.
 
-    **2026-08-13 실측 반영**: t_f = 1.0 mm, s = 5.1 mm이 확정돼 t_f/s = 0.196이다. 이는 얇은면판
-    극한이 아니므로 위 닫힌형(선행차수)은 d_K를 19–39 % 과소평가한다. 정확 단면으로 계산한
-    **as-built 법칙**(`sandwich_asbuilt`)을 세 번째 법칙으로 함께 낸다(설계서 F60).
+    **정본(G3, 2026-10-30; G1은 2026-10-16)**: 두 면판이 비대칭이다 — 앞판(흡입구 쪽, 손상면) 0.40 mm, 뒤판 0.60 mm,
+    안쪽 간격 3.00 mm(G1: 0.375·0.59·3.18 mm). 앞판 한 면 감육의 얇은면판 극한은 d_K = p·t_o/[t_d(1−p)+t_o],
+    d_M = p·t_d/(t_d+t_o)(⇒ d_M = d_K/(r+d_K), r = t_o/t_d = 1.5; G1 1.573)이고, 면판 자체관성·중립면 이동을 넣은 정확 단면이
+    **as-built 법칙**(`sandwich_asbuilt`)이다. 08-13 같은 두께 단면(t_f 1.0, s 5.1 mm)은 대조 열로 남긴다.
     """
     from . import figures as figs
     pool = _pool()
     rows = []
-    T_F, S_SEP = geo.T_SHEET, geo.FACE_SEPARATION
+    # 정본(G3): 앞판(손상면) t_d, 뒤판 t_o, 안쪽 간격 gap. 08-13 같은 두께 단면은 대조 열로만.
+    T_D, T_O, GAP = geo.T_FRONT, geo.T_BACK, geo.GAP
+    G0 = geo.GEOM_0813
     LAWS = ("exact", "sandwich", "sandwich_asbuilt")
 
-    # (0) as-built 단면 — 실측 t_f/s에서 선행차수·1차보정·정확값의 관계
+    def dk_thin(p):                      # 얇은면판 극한(면판 자체관성·중립면 이동 무시)
+        return p * T_O / (T_D * (1.0 - p) + T_O)
+
+    def dm_face(p):                      # 같은 깊이의 면적질량 손실(정확)
+        return p * T_D / (T_D + T_O)
+
+    # (0) as-built 단면 — 실측 비대칭 면판에서 얇은면판 극한과 정확값의 관계
     for p in (0.02, 0.05, 0.1, 0.2, 0.25, 0.3, 0.5):
-        dk_ex = float(fwd.sandwich_dk_from_depth(p, T_F, S_SEP))
-        dk_thin = p / (2.0 - p)
-        dk_1st = dk_thin * (1.0 + 2.0 * (1.0 - p) * T_F / S_SEP)
+        dk_ex = float(fwd.two_face_dk_from_depth(p))
+        dk_0813 = float(fwd.sandwich_dk_from_depth(p, G0.t_sheet, G0.face_separation))
         rows.append({"block": "asbuilt_section", "p_depth_frac": p,
-                     "t_f_mm": T_F * 1e3, "s_mm": S_SEP * 1e3, "t_f_over_s": T_F / S_SEP,
-                     "d_K_asbuilt": dk_ex, "d_K_thin_face": dk_thin,
-                     "d_K_first_order": dk_1st,
-                     "dK_asbuilt_over_thin": dk_ex / dk_thin,
-                     "dK_asbuilt_over_first_order": dk_ex / dk_1st,
-                     "d_M": p / 2.0, "zeta_asbuilt": (p / 2.0) / dk_ex,
-                     "zeta_thin_face": (p / 2.0) / dk_thin})
+                     "t_front_mm": T_D * 1e3, "t_back_mm": T_O * 1e3, "gap_mm": GAP * 1e3,
+                     "face_sep_mm": geo.FACE_SEPARATION * 1e3,
+                     "d_K_asbuilt": dk_ex, "d_K_thin_face": dk_thin(p),
+                     "dK_asbuilt_over_thin": dk_ex / dk_thin(p),
+                     "d_M": dm_face(p), "zeta_asbuilt": dm_face(p) / dk_ex,
+                     "zeta_thin_face": dm_face(p) / dk_thin(p),
+                     "d_K_equal_faces_0813": dk_0813, "zeta_equal_faces_0813": (p / 2.0) / dk_0813})
 
     # (1) 법칙 자체 — 같은 깊이비 p에서, 그리고 같은 d_K에서
     for p in (0.02, 0.05, 0.1, 0.2, 0.25, 0.3, 0.5):
         dk_mono, dm_mono = 1.0 - (1.0 - p) ** 3, p
-        dk_sw, dm_sw = p / (2.0 - p), p / 2.0
-        dk_ab = float(fwd.sandwich_dk_from_depth(p, T_F, S_SEP))
+        dk_sw, dm_sw = dk_thin(p), dm_face(p)
+        dk_ab = float(fwd.two_face_dk_from_depth(p))
         rows.append({"block": "law_vs_depth", "p_depth_frac": p,
                      "d_K_monolithic": dk_mono, "d_M_monolithic": dm_mono,
                      "zeta_monolithic": dm_mono / dk_mono,
@@ -1240,18 +1252,19 @@ def cmd_a10(args):
                              "abs_err_over_floor_m0": float(e[0]) / floor,
                              "worst_mode": int(MODES[int(np.argmax(e))][0])})
 
-    # (5) E3 사전등록: 목표 국소 d_K를 내는 **절대 가공깊이**
-    #     (레일 t = 2 t_f = 2.0 mm, 실측 면판 t_f = 1.0 mm)
+    # (5) E3·E2-I 사전등록: 목표 국소 d_K를 내는 **절대 가공깊이**
+    #     (레일 t = t_front + t_back = 1.00 mm(G3; G1 0.965); 실물은 얇은 앞판 t_d = 0.40 mm를 깎는다)
     t_tot = PLATE.t
-    t_face = T_F
     for dk in (0.05, 0.1, 0.15, 0.25):
         depth_mono = t_tot * (1.0 - (1.0 - dk) ** (1.0 / 3.0))
-        depth_sw = t_face * 2.0 * dk / (1.0 + dk)     # p = 2d_K/(1+d_K), depth = p·t_f
-        depth_ab = t_face * float(fwd.sandwich_depth_from_dk(dk, T_F, S_SEP))
+        p_sw = dk * (T_D + T_O) / (T_O + dk * T_D)        # 얇은면판 극한의 역
+        depth_sw = T_D * p_sw
+        depth_ab = T_D * float(fwd.two_face_depth_from_dk(dk))
         rows.append({"block": "machining_depth", "d_K_local_target": dk,
                      "depth_mm_monolithic": depth_mono * 1e3,
                      "depth_mm_sandwich": depth_sw * 1e3,
                      "depth_mm_asbuilt": depth_ab * 1e3,
+                     "depth_frac_of_front_asbuilt": depth_ab / T_D,
                      "depth_ratio_sw_over_mono": depth_sw / depth_mono,
                      "depth_ratio_asbuilt_over_mono": depth_ab / depth_mono})
 
@@ -1346,9 +1359,14 @@ def _band_anchor_rows(res0, lam0, h0, r3, nr, nt, nz, xi_c, half, depth,
 # ---------------------------------------------------------------- B5
 #: B5 형상 구성 — as-built 판두께·유로폭은 고정, **미확정**(베인 입구반경·wrap 각)만 스윕한다.
 B5_CONFIGS = {
-    "asbuilt":   dict(r_vane_in=0.0170, wrap_deg=90.0),
-    "vane_in19": dict(r_vane_in=0.0190, wrap_deg=90.0),
-    "wrap60":    dict(r_vane_in=0.0190, wrap_deg=60.0),
+    # G1(2026-10-16): 실측 베인 입구 15 mm·wrap 62°(용접 자국 50.5° ± 2° → 57–67°)와 그 괄호.
+    # 08-13 구성(r_vin 17/19 mm, wrap 90/60°)은 제출본 재현용으로 `_0813` 접미로 남긴다.
+    "asbuilt":   dict(r_vane_in=geo.ASBUILT.r_vane_in, wrap_deg=geo.ASBUILT.wrap_deg),
+    "wrap55":    dict(r_vane_in=geo.ASBUILT.r_vane_in, wrap_deg=55.0),
+    "wrap70":    dict(r_vane_in=geo.ASBUILT.r_vane_in, wrap_deg=70.0),
+    "asbuilt_0813":   dict(r_vane_in=0.0170, wrap_deg=90.0),
+    "vane_in19_0813": dict(r_vane_in=0.0190, wrap_deg=90.0),
+    "wrap60_0813":    dict(r_vane_in=0.0190, wrap_deg=60.0),
 }
 
 
@@ -1675,7 +1693,8 @@ def cmd_b7(args):
 #: A13 순환대칭 규명 구성. `arcN`은 베인 방위 점유 셀수를 키워 C6 변조를 **연속적으로**
 #: 0까지 줄이는 스윕(arc18 = 방위 균일 웹 = 정확한 축대칭 대조군).
 A13_CONFIGS: dict = {
-    "c6_asbuilt": dict(n_vane=6),                       # 물리 t_vane(≈1셀) = 그림 형상
+    # 실측 형상(깃 1.2 mm, wrap 62°)에서 물리 t_vane 판정은 18×108의 한 반경단에서 비므로 1셀/단을 명시한다
+    "c6_asbuilt": dict(n_vane=6, vane_arc_cells=1),     # = 그림 형상
     "c6_web":     dict(n_vane=6, vane_mode="web"),      # 축대칭 대조군
     "c4":         dict(n_vane=4, vane_arc_cells=1),     # m=N/2=2가 singlet이 되는가
     "c12":        dict(n_vane=12, vane_arc_cells=1),    # m=3이 doublet으로 되돌아오는가
@@ -1999,7 +2018,7 @@ def cmd_a14(args):
 
     # --- (3) 베인 쿠폰(E2 시편) ------------------------------------------
     if "vane" in args.rails:
-        L, w, h = VANE.L, geo.B2_CHANNEL, VANE.h
+        L, w, h = VANE.L, geo.VANE_WIDTH, VANE.h
         c, cn, _ = r3.vane_mesh(L=L, w=w, h=h, nx=60, ny=4, nz=8)
         res = r3.solve_modes(c, cn, VANE.E, VANE.nu, VANE.rho, r3.clamp_root(),
                              n_modes=args.n_modes, order=2, keep_shapes=True)
@@ -2010,7 +2029,7 @@ def cmd_a14(args):
         for k in range(len(res.freqs)):
             emit("vane_coupon", k, res.freqs[k], res.full_shapes[k], res.field_coors,
                  None, m_tot, res.ndof,
-                 {"config": "asbuilt_30x4.1x1.0", "bc": "root clamp",
+                 {"config": f"asbuilt_{L*1e3:.0f}x{w*1e3:.1f}x{h*1e3:.1f}", "bc": "root clamp",
                   "mesh_size_mm": float("nan"), "mode_kind": kinds[k],
                   "eb_tip_anchor_per_kg": anchor})
 
@@ -2026,7 +2045,7 @@ CANON_MD = (Path(__file__).resolve().parents[1] / "docs" / "paper3-jsv"
 #: R0 = a18의 직선 쿠폰. **이 격자·물성이 a18 산출을 정확히 재현한다**
 #: (ndof 68040/58644, f₁ flap 886.9 → 265.6 Hz). a18은 만드는 명령이 리포에 없어
 #: 재현이 불가능했다(F51과 같은 부류) — a19가 그 단을 다시 계산하며 함께 닫는다.
-A19_COUPON = dict(L=0.030, w=0.0041, h=0.0010, nx=60, ny=4, nz=10)
+A19_COUPON = dict(L=0.030, w=geo.VANE_WIDTH, h=geo.T_VANE, nx=60, ny=4, nz=10)
 A19_COUPON_MAT = dict(E=193e9, nu=0.29, rho=8000.0)
 A19_KERF = {"xc_over_L": 0.125, "width": 0.0075, "depth_frac": 0.6}
 
@@ -2040,6 +2059,30 @@ def ladder_factors(shifts):
     for prev, cur in zip(shifts[:-1], shifts[1:]):
         out.append(prev / cur if cur else float("nan"))
     return np.array(out)
+
+
+def _a19_r3_hex(key: str, d_frac: float, arc_mm: float) -> dict:
+    """a19 R3 — 정확 C6 육면체 조립체의 베인 0 뿌리 물리적 감육(`n6_run vanethin`) 결과에서 가장 낮은 doublet."""
+    d = pd.read_csv(DATA / f"rev1_n6_vanethin_{key}.csv")
+    d = d[np.isclose(d["frac"], d_frac) & (d["deg"] == 2)].sort_values("f_Hz")
+    if d.empty:
+        raise SystemExit(f"rev1_n6_vanethin_{key}.csv에 frac={d_frac} doublet 행이 없다 — `n6_run vanethin` 먼저")
+    r = d.iloc[0]
+    row = {"rung": "R3", "model": "cyclically exact assembly (hex, order 2)",
+           "geometry": f"same vane in 6-vane assembly, arc {arc_mm:.2f} mm",
+           "boundary": f"installed: hub clamped ({key})", "observable": f"lowest doublet pair mean ({r['label']})",
+           "mesh_mm": float("nan"), "ladder_mm": float("nan"), "chain": True,
+           "ndof_healthy": int(r["ndof"]) if "ndof" in r and np.isfinite(r["ndof"]) else -1,
+           "f_healthy_Hz": float(r["f_Hz"]), "shift_pct": float(r["dfreq_mean_pct"]),
+           "split_pct_of_f": float(r["split_pct_of_f"]),
+           "UK_window": float(r.get("Efrac_window", np.nan)), "UM_window": float(r.get("Tfrac_window", np.nan)),
+           # 창 부피 = 제거 부피 / 감육률(캠버 대칭 감육은 창 안 베인 부피에 정확히 비례)
+           "window_volume_mm3": float(r["vol_removed_mm3"]) / d_frac if "vol_removed_mm3" in r else float("nan"),
+           "note": f"physical root thinning, read from rev1_n6_vanethin_{key}.csv"}
+    row["f_damaged_Hz"] = row["f_healthy_Hz"] * (1 + row["shift_pct"] / 100)
+    row["shift_pct_first_order"] = 50.0 * (-row["UK_window"] * (1.0 - (1.0 - d_frac) ** 3)
+                                           + row["UM_window"] * d_frac)
+    return row
 
 
 def _a19_assembly_shift(mesh_mm: float, config: str):
@@ -2057,6 +2100,62 @@ def _a19_assembly_shift(mesh_mm: float, config: str):
         if len(sel):
             return float(sel["pair1_mean_shift_pct"].iloc[0]), name
     return float("nan"), ""
+
+
+def cmd_a18(args):
+    """§4.3 — 정합 손상 대조(Table S7): 직선 쿠폰과 조립체에 **같은** 뿌리 60 % 두께 감소.
+
+    쿠폰: `A19_COUPON`(정본 깃 G3 30 × 3.0 × 1.0 mm; G1 30 × 3.2 × 1.2)·`A19_KERF`(뿌리 1/4 스팬, 한쪽에서 두께 60 % 제거), 뿌리 클램프.
+    굽힘 1–3차는 **형상으로** 고른다(`rail3d.beam_mode_kinds`, F181). 조립체: 정확 C6 육면체 조립체의 물리적
+    감육(`n6_run vanethin` 설치 상태, `n2_run vanethin` 레일 지지)에서 가장 낮은 doublet의 쌍평균.
+    옛 판(08-13)은 사면체 b5 조립체 쌍평균과 30 × 4.1 × 1.0 mm 쿠폰을 썼다(재현 명령 없음 — 이 명령이 대체).
+    """
+    from . import rail3d as r3
+    mat = A19_COUPON_MAT
+
+    def flaps(coors, conn):
+        res = r3.solve_modes(coors, conn, mat["E"], mat["nu"], mat["rho"], r3.clamp_root(),
+                             n_modes=args.n_modes, order=2, keep_shapes=True)
+        kinds = r3.beam_mode_kinds(res)
+        f = [float(res.freqs[i]) for i, k in enumerate(kinds) if k == "flap"][:3]
+        return f + [float("nan")] * (3 - len(f)), int(res.ndof), kinds
+
+    ch, nh, _ = r3.vane_mesh(**A19_COUPON)
+    cd, nd, kinfo = r3.vane_mesh(kerf=A19_KERF, **A19_COUPON)
+    fh, ndof_h, kh = flaps(ch, nh)
+    fd, ndof_d, kd = flaps(cd, nd)
+    dims = f"{A19_COUPON['L']*1e3:.0f}x{A19_COUPON['w']*1e3:.1f}x{A19_COUPON['h']*1e3:.1f}"
+    rows = [
+        {"case": "isolated_vane_healthy", "f1_flap_Hz": fh[0], "f2_flap_Hz": fh[1], "f3_flap_Hz": fh[2],
+         "ndof": ndof_h, "damage": "none", "note": f"as-built coupon {dims}, root clamp; kinds {','.join(kh[:6])}"},
+        {"case": "isolated_vane_60pct_root_thinning", "f1_flap_Hz": fd[0], "f2_flap_Hz": fd[1], "f3_flap_Hz": fd[2],
+         "ndof": ndof_d, "damage": f"{A19_KERF['depth_frac']*100:.0f}% thickness over x/L in [0,0.25]",
+         "note": "same damage idealization as the assembly (one-sided removal; I about the shifted centroid)"},
+        {"case": "shift_pct", "f1_flap_Hz": 100 * (fd[0] / fh[0] - 1), "f2_flap_Hz": 100 * (fd[1] / fh[1] - 1),
+         "f3_flap_Hz": 100 * (fd[2] / fh[2] - 1), "ndof": np.nan, "damage": "—", "note": "isolated-vane shifts"},
+    ]
+    c1 = rows[-1]["f1_flap_Hz"]
+    for case, pre, key, what in (("assembly_pair_mean_installed", "n6", args.key_installed,
+                                  "exact C6 hex, installed (hub clamped)"),
+                                 ("assembly_pair_mean_rail_support", "n2", args.key_rail,
+                                  "exact C6 hex, rail support (r = a clamped)")):
+        p = DATA / f"rev1_{pre}_vanethin_{key}.csv"
+        if not p.exists():
+            print(f"[a18] {p.name} 없음 — 건너뜀", flush=True)
+            continue
+        d = pd.read_csv(p)
+        d = d[np.isclose(d["frac"], A19_KERF["depth_frac"]) & (d["deg"] == 2)].sort_values("f_Hz")
+        r = d.iloc[0]
+        rows.append({"case": case, "f1_flap_Hz": float(r["dfreq_mean_pct"]), "f2_flap_Hz": np.nan,
+                     "f3_flap_Hz": np.nan, "ndof": float(r["ndof"]) if "ndof" in r else np.nan,
+                     "damage": "same 60% root thinning (symmetric about the camber)",
+                     "note": f"{what}; {r['label']} at {r['f_Hz']:.0f} Hz, split {r['split_pct_of_f']:.3f}% of f"})
+        rows.append({"case": f"dilution_factor_{case.split('_mean_')[1]}", "f1_flap_Hz": c1 / float(r["dfreq_mean_pct"]),
+                     "f2_flap_Hz": np.nan, "f3_flap_Hz": np.nan, "ndof": np.nan, "damage": "—",
+                     "note": "coupon f1 shift / assembly pair-mean shift (matched damage)"})
+    df = pd.DataFrame(rows)
+    _save(df, "a18_matched_damage_control.csv")
+    print(df.to_string(index=False))
 
 
 def cmd_a19(args):
@@ -2212,7 +2311,14 @@ def cmd_a19(args):
               f"(lowest {row2['f_damaged_lowest_Hz']/1e3:.1f} kHz), "
               f"U_K(cluster mean)={row2['UK_window']:.4f}", flush=True)
 
-        # ---- R3: 강하는 커밋된 b5에서, 에너지 분율만 건전 조립체 1회 해에서 -----
+        # ---- R3(G1 기본): 정확 C6 육면체 조립체(설치 상태)의 물리적 뿌리 감육 — `n6_run vanethin` -----
+        if args.r3_source == "hex":
+            row3 = _a19_r3_hex(args.r3_key, d_frac, arc_mm)
+            group.append(row3)
+            print(f"[a19] R3(hex {args.r3_key}) pair mean={row3['f_healthy_Hz']:.1f} Hz "
+                  f"shift={row3['shift_pct']:+.4f} % U_K={row3['UK_window']:.5f} "
+                  f"U_M={row3['UM_window']:.5f}", flush=True)
+        # ---- R3(옛): 강하는 커밋된 b5에서, 에너지 분율만 건전 조립체 1회 해에서 -----
         shift3, src = _a19_assembly_shift(ms * 1e3, args.config)
         row3 = {
             "rung": "R3", "model": "welded assembly (tet, order 2)",
@@ -2222,7 +2328,9 @@ def cmd_a19(args):
             "ladder_mm": ms * 1e3, "shift_pct": shift3, "chain": True,
             "note": f"shift read from {src}" if src else "b5 output missing",
         }
-        if not args.skip_assembly:
+        if args.r3_source == "hex":
+            pass
+        elif not args.skip_assembly:
             ca, na = icad.build_geometry(spec_h, mesh_size=ms, workdir=args.workdir,
                                          tag=f"{tag}_asm")
             mask_a = icad.damaged_cell_mask(spec_h, ca, na, 0)
@@ -2248,7 +2356,8 @@ def cmd_a19(args):
                   f"U_M={row3['UM_window']:.5f} "
                   f"members {row3['UK_member_lo']:.5f}/{row3['UK_member_hi']:.5f}",
                   flush=True)
-        group.append(row3)
+        if args.r3_source != "hex":
+            group.append(row3)
 
         # 인자 사슬은 **관측량이 정의된 단**만 잇는다(R2는 진단이라 빠진다).
         chain = [g for g in group if g["chain"]]
@@ -2309,10 +2418,20 @@ def cmd_datapackage(args):
     보충자료 서두가 "artifacts travel with this document as a separate data package, listed
     with byte counts and SHA-256 digests in its manifest"라고 약속하므로, 그 약속을 손이 아니라
     명령이 지키게 한다(a18·이전 패키지가 실제로 낡었다 — 설계서 F153).
+    원고 없는 배포본(공개 저장소)에서는 인용 목록 대신 데이터 폴더의 산출물 전부를 묶는다(T-D5).
     """
     from . import submission as sub
-    res = sub.build_data_package(Path(args.canon).read_text(),
-                                 args.data or DATA, args.figs or FIGS, args.out)
+    data = Path(args.data or DATA)
+    canon = Path(args.canon)
+    if canon.exists():
+        text = canon.read_text()
+    else:
+        # 원고 없는 배포본(공개 저장소): 인용 목록을 뽑을 수 없으니 산출물 전부를 묶고 영어로 알린다
+        text = "\n".join(f"`{p.name}`" for p in sorted(data.iterdir())
+                         if sub.ARTIFACT.fullmatch(f"`{p.name}`"))
+        print(f"[datapackage] {canon} not found (no manuscript in this checkout); "
+              f"bundling every artifact in {data} instead of the cited ones")
+    res = sub.build_data_package(text, data, args.figs or FIGS, args.out)
     print(f"[datapackage] {res['out']}  파일 {len(res['files'])}개")
     if res["missing"]:
         raise SystemExit(f"인용됐으나 디스크에 없는 산출물: {res['missing']}")
@@ -2368,8 +2487,8 @@ def build_parser():
     sub = p.add_subparsers(dest="item", required=True)
     sp = sub.add_parser("a5")
     sp.add_argument("--mass", nargs="?", const="exact", default=None)
-    #: 20 kHz = 설계서 §4-6이 동결한 DAQ 대역, 25.6 kHz = 51.2 kS/s 채널의 대역(F59 감도).
-    sp.add_argument("--f-max", type=float, nargs="+", default=[2.0e4, 2.56e4])
+    #: 기본 = 계열 풀(G2 D3). 주파수 컷으로 고르려면 값을 준다(옛 규약 20 kHz·25.6 kHz는 레일 두께 2.0 mm 기준).
+    sp.add_argument("--f-max", type=float, nargs="+", default=None)
     sp.add_argument("--pool-ms", type=int, nargs="+", default=None,
                     help="후보 풀의 방위차수(기본 0 1 2 3 4). C6 감도용: 0 1 2 3")
     sp.add_argument("--tag", default="",
@@ -2431,9 +2550,9 @@ def build_parser():
     sp.add_argument("--nz", type=int, default=8)
     sp.add_argument("--depths", type=float, nargs="+", default=[0.25, 0.5, 0.625])
     sp.add_argument("--widths", type=float, nargs="+", default=[0.00025, 0.001])
-    # 스팬방향 폭: as-built(유로폭 b₂ = 4.1 mm)를 먼저, 옛 규약 2h를 연속성 확인용으로.
+    # 스팬방향 폭: as-built(깃 높이 ≈ 판 사이 간격, 쿠폰 폭 3.2 mm)를 먼저, 옛 규약 2h를 연속성 확인용으로.
     sp.add_argument("--vane-widths", type=float, nargs="+",
-                    default=[geo.B2_CHANNEL, 2 * geo.VANE.h])
+                    default=[geo.VANE_WIDTH, 2 * geo.VANE.h])
     sp.set_defaults(func=cmd_b2)
 
     sp = sub.add_parser("b3")
@@ -2443,7 +2562,8 @@ def build_parser():
     sp.add_argument("--ntheta", type=int, default=48)
     sp.add_argument("--nz", type=int, default=4)
     sp.add_argument("--xi", type=float, nargs="+", default=[0.2, 0.5, 0.8])
-    sp.add_argument("--dtheta", type=float, nargs="+", default=[15, 30])
+    # 원고 §4.3의 "nine configurations" = ξ 3개 × Δθ 15/30/60° (60°는 m=3 1차 분리 영점 Δη₃ = 0)
+    sp.add_argument("--dtheta", type=float, nargs="+", default=[15, 30, 60])
     sp.add_argument("--depths", type=float, nargs="+", default=[0.5])
     sp.add_argument("--half-xi", type=float, default=0.1,
                     help="포켓 반경 반폭(ξ 단위). 0.1이면 경계가 ξ의 0.1 배수 → nr∈{10,20,30} 정합")
@@ -2463,13 +2583,19 @@ def build_parser():
     sp.set_defaults(func=cmd_b4)
 
     sp = sub.add_parser("b5")
-    sp.add_argument("--configs", nargs="+", default=list(B5_CONFIGS),
+    sp.add_argument("--configs", nargs="+", default=["asbuilt", "wrap55", "wrap70"],
                     choices=list(B5_CONFIGS))
     sp.add_argument("--damage", type=float, nargs="+", default=[0.0, 0.3, 0.6])
     sp.add_argument("--n-modes", type=int, default=10)
     sp.add_argument("--mesh-size", type=float, default=0.0012)
     sp.add_argument("--workdir", default="/tmp")
     sp.set_defaults(func=cmd_b5)
+
+    sp = sub.add_parser("a18")
+    sp.add_argument("--n-modes", type=int, default=10)
+    sp.add_argument("--key-installed", default=f"ff32x16h6w62c{geo.ASBUILT.collar_h * 1e4:.0f}k92")
+    sp.add_argument("--key-rail", default="fit32x16v1z2c2w62")
+    sp.set_defaults(func=cmd_a18)
 
     sp = sub.add_parser("a19")
     sp.add_argument("--config", default="asbuilt", choices=list(B5_CONFIGS))
@@ -2479,6 +2605,10 @@ def build_parser():
     sp.add_argument("--damage-span", type=float, default=0.25)
     sp.add_argument("--n-modes", type=int, default=8)
     sp.add_argument("--workdir", default="/tmp")
+    sp.add_argument("--r3-source", choices=["hex", "b5"], default="hex",
+                    help="R3 조립체 단: hex = 정확 C6 육면체 물리적 감육(G1 기본), b5 = 옛 사면체")
+    sp.add_argument("--r3-key", default=f"ff32x16h6w62c{geo.ASBUILT.collar_h * 1e4:.0f}k92",
+                    help="`n6_run vanethin` 키(설치 상태; 테 높이 = 정본)")
     sp.add_argument("--skip-assembly", action="store_true",
                    help="조립체 에너지 분율 계산 생략(강하는 커밋된 b5에서 읽는다)")
     sp.set_defaults(func=cmd_a19)

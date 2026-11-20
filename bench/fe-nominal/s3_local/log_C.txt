@@ -1,0 +1,19 @@
+install jax and jaxlib to use terms_jax.py!
+sfepy: WARNING: module /home/super/equip-venv/lib/python3.12/site-packages/sfepy/terms/terms_jax.py cannot be imported!
+sfepy: reason:
+ No module named 'jax'
+[C] 459738 DOF, 건전 2288.5–19118.9 Hz, 관측량 54 (259s)
+[C] C ξ0.2–0.4 20° @0° (274s)
+[C] C ξ0.2–0.4 20° @15° (288s)
+[C] C ξ0.2–0.4 20° @30° (302s)
+[C] C ξ0.2–0.4 20° @45° (316s)
+[C] C ξ0.2–0.4 30° @0° (331s)
+[C] C ξ0.2–0.4 30° @15° (345s)
+[C] C ξ0.2–0.4 30° @30° (359s)
+[C] C ξ0.2–0.4 30° @45° (373s)
+[C] C ξ0.2–0.4 60° @0° (387s)
+[C] C ξ0.2–0.4 60° @15° (401s)
+[C] C ξ0.2–0.4 60° @30° (415s)
+[C] C ξ0.2–0.4 60° @45° (429s)
+[C] C ξ0.2–0.4 360° @0° (444s)
+[C] 끝 (444s)
